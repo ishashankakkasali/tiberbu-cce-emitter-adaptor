@@ -14,17 +14,16 @@ import java.util.Optional;
  *
  * <p>Header names are stored lowercased so lookups are case-insensitive, which
  * HTTP requires and which no caller should have to think about.
+ *
+ * <p><b>No header is currently relied upon.</b> {@link #getHeader(String)} is a
+ * generic, case-insensitive lookup rather than a set of named accessors for
+ * specific headers, since which headers (if any) tibERbu can or does send has
+ * not been confirmed. Facility ID is currently resolved entirely from the FHIR
+ * resource (see {@code FacilityIdExtractor}) and correlation ID is always
+ * adaptor-generated — if a relevant header does turn out to be available, this
+ * generic lookup already covers reading it.
  */
 public final class InboundRequest {
-
-    /** Facility ID supplied by the source system. Optional. */
-    public static final String HEADER_FACILITY_ID = "x-facility-id";
-
-    /** The source system's own event identifier, used to derive a stable CloudEvents id. Optional. */
-    public static final String HEADER_SOURCE_EVENT_ID = "x-source-event-id";
-
-    /** Trace correlation ID. Optional — a UUID is generated when it is absent. */
-    public static final String HEADER_CORRELATION_ID = "x-correlation-id";
 
     private final String rawBody;
     private final Map<String, String> headersByLowercaseName;
@@ -64,21 +63,6 @@ public final class InboundRequest {
         }
         String headerValue = headersByLowercaseName.get(headerName.toLowerCase(java.util.Locale.ROOT));
         return (headerValue == null || headerValue.isBlank()) ? Optional.empty() : Optional.of(headerValue);
-    }
-
-    /** @return the {@code X-Facility-Id} header, if the source system sent one */
-    public Optional<String> getFacilityIdHeader() {
-        return getHeader(HEADER_FACILITY_ID);
-    }
-
-    /** @return the {@code X-Source-Event-Id} header, if the source system sent one */
-    public Optional<String> getSourceEventIdHeader() {
-        return getHeader(HEADER_SOURCE_EVENT_ID);
-    }
-
-    /** @return the {@code X-Correlation-Id} header, if the source system sent one */
-    public Optional<String> getCorrelationIdHeader() {
-        return getHeader(HEADER_CORRELATION_ID);
     }
 
     /**

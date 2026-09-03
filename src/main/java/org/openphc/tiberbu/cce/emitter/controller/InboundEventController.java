@@ -42,9 +42,9 @@ public class InboundEventController {
      * an ignored payload, not a {@code 400}.
      *
      * @param rawRequestBody     the request body exactly as received, may be absent
-     * @param requestHeaders     all request headers; the optional
-     *                           {@code X-Facility-Id}, {@code X-Source-Event-Id} and
-     *                           {@code X-Correlation-Id} are read downstream
+     * @param requestHeaders     all request headers, captured on {@link InboundRequest}
+     *                           for generic lookup — no specific header is currently
+     *                           required or relied upon
      * @param httpServletRequest used only to record the request path
      * @return {@code 202} with a per-event receipt, or {@code 200} with an acknowledgement
      */

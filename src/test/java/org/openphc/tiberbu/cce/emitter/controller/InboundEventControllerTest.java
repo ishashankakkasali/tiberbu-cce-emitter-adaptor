@@ -95,16 +95,14 @@ class InboundEventControllerTest {
     }
 
     @Test
-    @DisplayName("the optional contract headers reach the service")
-    void passesOptionalHeadersThrough() throws Exception {
+    @DisplayName("any header sent still reaches the service, generically")
+    void anyHeaderSentReachesTheService() throws Exception {
         given(inboundEventService.process(any()))
                 .willReturn(InboundOutcome.ignored("Non-processable payload"));
 
         mockMvc.perform(post("/inbound")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .header("X-Facility-Id", "FAC-0001")
-                        .header("X-Source-Event-Id", "VCR-20260901-57098420")
-                        .header("X-Correlation-Id", "7f3c9b12-4d5e-4a6b-8c7d-9e0f1a2b3c4d")
+                        .header("X-Request-Id", "req-001")
                         .content(CONSENT_BUNDLE_ENVELOPE))
                 .andExpect(status().isOk());
 
@@ -112,17 +110,14 @@ class InboundEventControllerTest {
         org.mockito.Mockito.verify(inboundEventService).process(capturedRequest.capture());
 
         InboundRequest inboundRequest = capturedRequest.getValue();
-        assertThat(inboundRequest.getFacilityIdHeader()).contains("FAC-0001");
-        assertThat(inboundRequest.getSourceEventIdHeader()).contains("VCR-20260901-57098420");
-        assertThat(inboundRequest.getCorrelationIdHeader())
-                .contains("7f3c9b12-4d5e-4a6b-8c7d-9e0f1a2b3c4d");
+        assertThat(inboundRequest.getHeader("X-Request-Id")).contains("req-001");
         assertThat(inboundRequest.getRawBody()).isEqualTo(CONSENT_BUNDLE_ENVELOPE);
         assertThat(inboundRequest.getRequestPath()).isEqualTo("/inbound");
     }
 
     @Test
-    @DisplayName("omitting every optional header still succeeds")
-    void missingOptionalHeadersDoNotFailTheRequest() throws Exception {
+    @DisplayName("a request with no custom headers still succeeds")
+    void noCustomHeadersStillSucceeds() throws Exception {
         given(inboundEventService.process(any()))
                 .willReturn(InboundOutcome.ignored("Non-processable payload"));
 
@@ -133,7 +128,7 @@ class InboundEventControllerTest {
 
         ArgumentCaptor<InboundRequest> capturedRequest = ArgumentCaptor.forClass(InboundRequest.class);
         org.mockito.Mockito.verify(inboundEventService).process(capturedRequest.capture());
-        assertThat(capturedRequest.getValue().getFacilityIdHeader()).isEmpty();
+        assertThat(capturedRequest.getValue().getHeader("X-Facility-Id")).isEmpty();
     }
 
     @Test

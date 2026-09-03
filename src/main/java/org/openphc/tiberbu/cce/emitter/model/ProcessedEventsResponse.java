@@ -31,7 +31,7 @@ public record ProcessedEventsResponse(
      *
      * @param eventId         the CloudEvents {@code id}
      * @param eventType       the FHIR resource type, serialized as {@code type}
-     * @param patientSubject  the patient UPID, serialized as {@code subject}
+     * @param patientSubject  the patient identifier, serialized as {@code subject}
      * @param collectorStatus the Collector's reported status
      */
     public record EventDetail(

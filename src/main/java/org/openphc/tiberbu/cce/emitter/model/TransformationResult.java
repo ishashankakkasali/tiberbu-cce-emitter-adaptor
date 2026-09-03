@@ -14,8 +14,11 @@ package org.openphc.tiberbu.cce.emitter.model;
  *
  * @param eventId         the CloudEvents {@code id} that was forwarded
  * @param eventType       the FHIR resource type carried as the CloudEvents {@code type}
- * @param patientSubject  the patient UPID carried as the CloudEvents {@code subject}
- * @param collectorStatus {@link #COLLECTOR_STATUS_ACCEPTED} or {@link #COLLECTOR_STATUS_DUPLICATE}
+ * @param patientSubject  the patient identifier carried as the CloudEvents {@code subject}
+ * @param collectorStatus the Collector's reported status, passed through verbatim from
+ *                         {@code data.status}. {@link #COLLECTOR_STATUS_ACCEPTED} and
+ *                         {@link #COLLECTOR_STATUS_DUPLICATE} are today's known values, not
+ *                         an exhaustive set — a future third value requires no code change here
  */
 public record TransformationResult(
         String eventId,
