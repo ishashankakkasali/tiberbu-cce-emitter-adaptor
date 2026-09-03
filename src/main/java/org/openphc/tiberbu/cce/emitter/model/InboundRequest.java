@@ -17,7 +17,7 @@ import java.util.Optional;
  */
 public final class InboundRequest {
 
-    /** Facility FOSA ID supplied by the source system. Optional. */
+    /** Facility ID supplied by the source system. Optional. */
     public static final String HEADER_FACILITY_ID = "x-facility-id";
 
     /** The source system's own event identifier, used to derive a stable CloudEvents id. Optional. */

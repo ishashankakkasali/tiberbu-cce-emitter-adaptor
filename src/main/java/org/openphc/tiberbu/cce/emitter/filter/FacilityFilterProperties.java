@@ -21,9 +21,9 @@ import java.util.Set;
  *
  * <p>Matching is case-insensitive: IDs are lowercased on both sides of the
  * comparison, so a configured {@code abc-123} still admits an inbound
- * {@code ABC-123}. Numeric FOSA codes are unaffected.
+ * {@code ABC-123}. Numeric facility codes are unaffected.
  *
- * @param ids allowed facility FOSA IDs. Normalized to an immutable, trimmed,
+ * @param ids allowed facility IDs. Normalized to an immutable, trimmed,
  *            lowercased set for O(1) lookup, in configuration order so startup
  *            logs read predictably. An empty set means the filter is INACTIVE
  *            and every event passes

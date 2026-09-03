@@ -441,7 +441,7 @@ curl -s http://localhost:8080/actuator/prometheus | grep cce_emitter
 ```bash
 curl -X POST http://localhost:8080/inbound \
   -H "Content-Type: application/json" \
-  -H "X-Facility-Id: FAC-FOSA-001" \
+  -H "X-Facility-Id: FAC-0001" \
   -H "X-Source-Event-Id: VCR-20260901-57098420" \
   -d '{
     "meta": {

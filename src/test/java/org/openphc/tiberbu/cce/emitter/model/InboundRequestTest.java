@@ -20,11 +20,11 @@ class InboundRequestTest {
         @DisplayName("is case-insensitive in both directions")
         void findsHeadersRegardlessOfCasing() {
             InboundRequest inboundRequest = InboundRequest.from(
-                    "{}", Map.of("X-Facility-Id", "FAC-FOSA-001"), "/inbound");
+                    "{}", Map.of("X-Facility-Id", "FAC-0001"), "/inbound");
 
-            assertThat(inboundRequest.getHeader("X-Facility-Id")).contains("FAC-FOSA-001");
-            assertThat(inboundRequest.getHeader("x-facility-id")).contains("FAC-FOSA-001");
-            assertThat(inboundRequest.getHeader("X-FACILITY-ID")).contains("FAC-FOSA-001");
+            assertThat(inboundRequest.getHeader("X-Facility-Id")).contains("FAC-0001");
+            assertThat(inboundRequest.getHeader("x-facility-id")).contains("FAC-0001");
+            assertThat(inboundRequest.getHeader("X-FACILITY-ID")).contains("FAC-0001");
         }
 
         @Test
@@ -42,13 +42,13 @@ class InboundRequestTest {
         @DisplayName("exposes the three optional contract headers by name")
         void exposesTheContractHeaders() {
             Map<String, String> requestHeaders = Map.of(
-                    "x-facility-id", "FAC-FOSA-001",
+                    "x-facility-id", "FAC-0001",
                     "X-Source-Event-Id", "VCR-20260901-57098420",
                     "X-CORRELATION-ID", "7f3c9b12-4d5e-4a6b-8c7d-9e0f1a2b3c4d");
 
             InboundRequest inboundRequest = InboundRequest.from("{}", requestHeaders, "/inbound");
 
-            assertThat(inboundRequest.getFacilityIdHeader()).contains("FAC-FOSA-001");
+            assertThat(inboundRequest.getFacilityIdHeader()).contains("FAC-0001");
             assertThat(inboundRequest.getSourceEventIdHeader()).contains("VCR-20260901-57098420");
             assertThat(inboundRequest.getCorrelationIdHeader())
                     .contains("7f3c9b12-4d5e-4a6b-8c7d-9e0f1a2b3c4d");
@@ -68,12 +68,12 @@ class InboundRequestTest {
         @DisplayName("the header map is unmodifiable and detached from the source map")
         void headerMapIsDefensivelyCopied() {
             Map<String, String> mutableHeaders = new HashMap<>();
-            mutableHeaders.put("X-Facility-Id", "FAC-FOSA-001");
+            mutableHeaders.put("X-Facility-Id", "FAC-0001");
 
             InboundRequest inboundRequest = InboundRequest.from("{}", mutableHeaders, "/inbound");
             mutableHeaders.put("X-Facility-Id", "TAMPERED");
 
-            assertThat(inboundRequest.getFacilityIdHeader()).contains("FAC-FOSA-001");
+            assertThat(inboundRequest.getFacilityIdHeader()).contains("FAC-0001");
             assertThatThrownBy(() -> inboundRequest.getHeadersByLowercaseName().put("x", "y"))
                     .isInstanceOf(UnsupportedOperationException.class);
         }

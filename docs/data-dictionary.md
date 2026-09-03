@@ -16,7 +16,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 | `time` | string (ISO-8601) | Recommended | Adaptor | Event creation timestamp in UTC |
 | `datacontenttype` | string | Recommended | Static | Always `"application/fhir+json"` |
 | `data` | object | Recommended | From FHIR resource | FHIR R4 resource JSON |
-| `facilityid` | string | Optional | Header / payload | Facility FOSA ID. Resolution order: (1) `X-Facility-Id` header; (2) `FacilityIdExtractor` — for `Encounter`, `hospitalization.origin` first, then `location[0].location` (the `source-facility` extension is never consulted for `Encounter` — see §3.5); for other types, `locationReference[0]` (e.g. `ServiceRequest`) or `location` direct reference (e.g. `Procedure`, `Immunization`). Any `ResourceType/` prefix stripped (`Location/1302` → `1302`, `Organization/1302` → `1302`). `null` for resources with no location info (e.g. `Patient`, `Observation`). |
+| `facilityid` | string | Optional | Header / payload | Facility ID. Resolution order: (1) `X-Facility-Id` header; (2) `FacilityIdExtractor` — for `Encounter`, `hospitalization.origin` first, then `location[0].location` (the `source-facility` extension is never consulted for `Encounter` — see §3.5); for other types, `locationReference[0]` (e.g. `ServiceRequest`) or `location` direct reference (e.g. `Procedure`, `Immunization`). Any `ResourceType/` prefix stripped (`Location/1302` → `1302`, `Organization/1302` → `1302`). `null` for resources with no location info (e.g. `Patient`, `Observation`). |
 | `sourceeventid` | string | Optional | Header / payload | Source system's original event ID from `X-Source-Event-Id` header |
 | `correlationid` | string | Recommended | Header or generated | Trace correlation ID. Priority: (1) `X-Correlation-Id` header, (2) adaptor-generated UUID. |
 | `protocolinstanceid` | string | Optional | Usually null | Protocol instance — emitter normally does not set this |
@@ -41,7 +41,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
   "subject": "KE-SHRP-170CDF0A-1363-4972-B36A",
   "time": "2026-09-01T11:55:42.118Z",
   "datacontenttype": "application/fhir+json",
-  "facilityid": "FAC-FOSA-001",
+  "facilityid": "FAC-0001",
   "sourceeventid": "VCR-20260901-57098420",
   "correlationid": "7f3c9b12-4d5e-4a6b-8c7d-9e0f1a2b3c4d",
   "data": {
@@ -119,9 +119,9 @@ Prefix: `cce.emitter.facility-filter`
 
 | Property | Type | Default | Env Var | Description |
 |----------|------|---------|---------|-------------|
-| `cce.emitter.facility-filter.ids` | List\<String\> | `[]` | `FACILITY_FILTER_IDS` | FOSA facility IDs to allow. Empty list = filter inactive (all events pass). Non-empty = only listed IDs are admitted. Comma-separated in env var form (e.g. `"0030,0042,0099"`). **In YAML, always quote IDs** to preserve leading zeros and avoid integer coercion (e.g. `["0234", "0030"]` — without quotes YAML strips the leading zero). Whitespace trimmed and IDs lowercased. Stored as `Set<String>` for O(1) lookup. |
+| `cce.emitter.facility-filter.ids` | List\<String\> | `[]` | `FACILITY_FILTER_IDS` | facility IDs to allow. Empty list = filter inactive (all events pass). Non-empty = only listed IDs are admitted. Comma-separated in env var form (e.g. `"0030,0042,0099"`). **In YAML, always quote IDs** to preserve leading zeros and avoid integer coercion (e.g. `["0234", "0030"]` — without quotes YAML strips the leading zero). Whitespace trimmed and IDs lowercased. Stored as `Set<String>` for O(1) lookup. |
 
-**Matching is case-insensitive.** Both the configured IDs and the resolved facility ID are lowercased before comparison, so `abc-123` in the allowlist admits an inbound `ABC-123`. Numeric FOSA codes are unaffected.
+**Matching is case-insensitive.** Both the configured IDs and the resolved facility ID are lowercased before comparison, so `abc-123` in the allowlist admits an inbound `ABC-123`. Numeric facility codes are unaffected.
 
 **Skip behaviour:** Events with a facility ID that is not in the allowlist return `200 OK` with `status: "skipped"` — they are not forwarded to the Collector. A skip is a normal outcome, not an error. Events with no facility ID are passed through unconditionally — only events that carry a resolved facility ID are subject to filtering. `FacilityIdExtractor` resolves the facility ID from, for `Encounter`, `hospitalization.origin` first and `location[0].location` as a fallback (per FHIR R4, `hospitalization` is only ever populated on a `TRANSFER_ENCOUNTER`; the `source-facility` extension is deliberately never consulted for `Encounter`); for other types, `locationReference[0]` (e.g. `ServiceRequest`) or a direct `location` reference (e.g. `Procedure`, `Immunization`), falling back to the `source-facility` extension for types with no FHIR location at all (e.g. `Observation`, `Condition`). Any `ResourceType/` prefix is stripped generically so both `Location/1302` and `Organization/1302` compare as `1302`. Resources with no location fields and no extension (e.g. `Patient`, `RelatedPerson`) resolve to `null` and always pass through.
 

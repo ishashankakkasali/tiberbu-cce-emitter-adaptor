@@ -102,7 +102,7 @@ class InboundEventControllerTest {
 
         mockMvc.perform(post("/inbound")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .header("X-Facility-Id", "FAC-FOSA-001")
+                        .header("X-Facility-Id", "FAC-0001")
                         .header("X-Source-Event-Id", "VCR-20260901-57098420")
                         .header("X-Correlation-Id", "7f3c9b12-4d5e-4a6b-8c7d-9e0f1a2b3c4d")
                         .content(CONSENT_BUNDLE_ENVELOPE))
@@ -112,7 +112,7 @@ class InboundEventControllerTest {
         org.mockito.Mockito.verify(inboundEventService).process(capturedRequest.capture());
 
         InboundRequest inboundRequest = capturedRequest.getValue();
-        assertThat(inboundRequest.getFacilityIdHeader()).contains("FAC-FOSA-001");
+        assertThat(inboundRequest.getFacilityIdHeader()).contains("FAC-0001");
         assertThat(inboundRequest.getSourceEventIdHeader()).contains("VCR-20260901-57098420");
         assertThat(inboundRequest.getCorrelationIdHeader())
                 .contains("7f3c9b12-4d5e-4a6b-8c7d-9e0f1a2b3c4d");

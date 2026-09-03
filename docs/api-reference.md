@@ -37,7 +37,7 @@ POST /inbound
 | Header | Required | Description |
 |--------|----------|-------------|
 | `Content-Type` | Yes | `application/json` |
-| `X-Facility-Id` | No | Facility FOSA ID |
+| `X-Facility-Id` | No | Facility ID |
 | `X-Source-Event-Id` | No | Source system's original event ID |
 | `X-Correlation-Id` | No | Trace correlation ID, used as the CloudEvent `correlationid`. If absent, the adaptor generates a UUID. |
 
@@ -100,7 +100,7 @@ There is no source-level matching step on this adaptor — the source is fixed b
 ```bash
 curl -X POST http://localhost:8080/inbound \
   -H "Content-Type: application/json" \
-  -H "X-Facility-Id: FAC-FOSA-001" \
+  -H "X-Facility-Id: FAC-0001" \
   -H "X-Source-Event-Id: VCR-20260901-57098420" \
   -H "X-Correlation-Id: 7f3c9b12-4d5e-4a6b-8c7d-9e0f1a2b3c4d" \
   -d '{
@@ -162,7 +162,7 @@ curl -X POST http://localhost:8080/inbound \
   "subject": "KE-SHRP-170CDF0A-1363-4972-B36A",
   "time": "2026-09-01T11:55:42.118Z",
   "datacontenttype": "application/fhir+json",
-  "facilityid": "FAC-FOSA-001",
+  "facilityid": "FAC-0001",
   "sourceeventid": "VCR-20260901-57098420",
   "correlationid": "7f3c9b12-4d5e-4a6b-8c7d-9e0f1a2b3c4d",
   "data": {
@@ -184,7 +184,7 @@ How each attribute is derived:
 | `type` | `Consent` | `entry[1].resource.resourceType`, verbatim |
 | `subject` | `KE-SHRP-170CDF0A-1363-4972-B36A` | `Consent.patient.reference`, `Patient/` prefix stripped |
 | `time` | `2026-09-01T11:55:42.118Z` | Adaptor processing time (UTC) — not `meta.timestamp` |
-| `facilityid` | `FAC-FOSA-001` | `X-Facility-Id` header, else extracted from the FHIR resource |
+| `facilityid` | `FAC-0001` | `X-Facility-Id` header, else extracted from the FHIR resource |
 | `sourceeventid` | `VCR-20260901-57098420` | `X-Source-Event-Id` header |
 | `correlationid` | `7f3c9b12-…` | `X-Correlation-Id` header, else a generated UUID |
 | `data` | the `Consent` resource | `entry[1].resource`, verbatim |
