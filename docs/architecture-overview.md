@@ -158,7 +158,7 @@ org.openphc.tiberbu.cce.emitter/
 │
 ├── model/                                         # DTOs
 │   ├── CloudEventDto.java                         #   CloudEvents v1.0 output DTO
-│   ├── InboundRequest.java                        #   Wraps incoming HTTP body + headers
+│   ├── InboundRequest.java                        #   Wraps incoming HTTP body + lowercased headers
 │   ├── SourceMetadata.java                        #   sourceIdentifier, facilityId, sourceEventId
 │   ├── TransformationResult.java                  #   Per-event success/failure detail
 │   ├── InboundOutcome.java                        #   HTTP status + body returned to the controller
