@@ -156,9 +156,21 @@ public class FacilityIdExtractor {
      * after stripping (e.g. a reference string that is only {@code "Organization/"}
      * with nothing after it) — the two checks are independent, not either/or.
      *
-     * <p>Example: {@code referenceToFacilityId} given a {@link Reference} built
-     * from {@code {"reference": "Organization/KE-SHRF-D601602F-C9AC-4CC5-9347"}}
-     * returns {@code "KE-SHRF-D601602F-C9AC-4CC5-9347"}.
+     * <p>Example (step 1, the common case): {@code referenceToFacilityId} given
+     * a {@link Reference} built from {@code {"reference":
+     * "Organization/KE-SHRF-D601602F-C9AC-4CC5-9347"}} returns {@code
+     * "KE-SHRF-D601602F-C9AC-4CC5-9347"} — {@code hasReference()} is {@code
+     * true}, the {@code "Organization/"} prefix is stripped, and what remains
+     * is non-blank, so step 1 returns immediately.
+     *
+     * <p>Example (step 2, the fallback): given a {@link Reference} built from
+     * {@code {"identifier": {"value": "1302"}}} — no {@code "reference"} field
+     * at all — {@code hasReference()} is {@code false}, so step 1 finds
+     * nothing; step 2 then reads {@code identifier.value} and returns {@code
+     * "1302"}. The same fallback also fires when a {@code "reference"} field
+     * is present but strips to nothing, e.g. {@code {"reference":
+     * "Organization/", "identifier": {"value": "1302"}}} — step 1's stripped
+     * result is blank, so step 2 still returns {@code "1302"}.
      */
     private String referenceToFacilityId(Reference reference) {
         // Step 1: prefer the reference string when it's present and, after
