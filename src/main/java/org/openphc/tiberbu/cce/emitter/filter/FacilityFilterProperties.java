@@ -63,12 +63,12 @@ public record FacilityFilterProperties(Set<String> ids) {
         return ids.contains(normalizeFacilityId(facilityId));
     }
 
-    private static Set<String> normalizeFacilityIds(Set<String> rawFacilityIds) {
-        if (rawFacilityIds == null || rawFacilityIds.isEmpty()) {
+    private static Set<String> normalizeFacilityIds(Set<String> configuredFacilityIds) {
+        if (configuredFacilityIds == null || configuredFacilityIds.isEmpty()) {
             return Set.of();
         }
         Set<String> normalizedFacilityIds = new LinkedHashSet<>();
-        for (String configuredFacilityId : rawFacilityIds) {
+        for (String configuredFacilityId : configuredFacilityIds) {
             if (configuredFacilityId != null && !configuredFacilityId.isBlank()) {
                 normalizedFacilityIds.add(normalizeFacilityId(configuredFacilityId));
             }
