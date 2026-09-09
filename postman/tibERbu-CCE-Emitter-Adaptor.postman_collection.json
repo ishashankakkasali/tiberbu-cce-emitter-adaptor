@@ -1,0 +1,905 @@
+{
+  "info": {
+    "name": "tibERbu CCE Emitter Adaptor",
+    "description": "Sample requests for the tibERbu CCE Emitter Adaptor's single inbound endpoint, POST /inbound. Every example body and saved response in this collection was captured against a real, running stack - the adaptor in Docker, wired to the real cce-collector-service (not a stub) - not hand-typed guesses.\n\n## Flow\n\nIn production: tibERbu -> CCE Gateway (Basic Auth -> Keycloak token exchange -> JWT validation + authorization) -> this adaptor -> CCE Collector -> Kafka. Folder 1 below exercises that real path end to end. Folders 2-5 bypass the gateway and hit the adaptor directly on its own port - useful for isolating the adaptor's own behavior in isolation, matching the adaptor's own docker-compose.yml dev setup, but not what a real tibERbu call looks like.\n\n## Variables\n\n- `base_url` - the adaptor's own base URL, bypassing the gateway (default: http://localhost:8081)\n- `gateway_base_url` - the CCE Gateway's base URL (default: http://localhost:8090)\n- `gateway_basic_auth_username` / `gateway_basic_auth_password` - a real Keycloak user in the `cce` realm, holding a realm role the gateway's own api_permissions table maps to POST /inbound. Never the gateway's own client secret - Postman only ever needs to know these two values.\n- `patient_id` / `facility_id` - reused across the constructed (non-artifact) example bodies below\n\n## Where the real examples come from\n\nThe two full Consent bundles and the Patient-only bundle are copied verbatim from this repo's own artifacts/ folder (real tibERbu sample payloads) - see api-reference.md section 3 for the same examples. artifacts/ is gitignored, so this collection inlines the content directly rather than referencing that path.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8081",
+      "type": "string"
+    },
+    {
+      "key": "patient_id",
+      "value": "KE-SHRP-170CDF0A-1363-4972-B36A",
+      "type": "string"
+    },
+    {
+      "key": "facility_id",
+      "value": "KE-SHRF-D601602F-C9AC-4CC5-9347",
+      "type": "string"
+    },
+    {
+      "key": "gateway_base_url",
+      "value": "http://localhost:8090",
+      "type": "string"
+    },
+    {
+      "key": "gateway_basic_auth_username",
+      "value": "tiberbu-test-user",
+      "type": "string"
+    },
+    {
+      "key": "gateway_basic_auth_password",
+      "value": "123456",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Via CCE Gateway (Basic Auth) - Primary Flow",
+      "description": "The real inbound path: tibERbu -> CCE Gateway (Basic Auth -> Keycloak token exchange -> JWT validation + authorization) -> this adaptor -> CCE Collector. Folders 2-5 below all bypass the gateway and hit the adaptor directly - useful for isolating the adaptor's own behavior, but not what a real tibERbu call looks like.",
+      "item": [
+        {
+          "name": "1.1 Consent - via Gateway with Basic Auth",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{gateway_basic_auth_username}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{gateway_basic_auth_password}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"meta\": {\n\t\t\"resourceType\": \"Bundle\",\n\t\t\"resourceId\": \"VCR-20260901-57098420\",\n\t\t\"event\": \"upserted\",\n\t\t\"source\": \"shr-mediator\",\n\t\t\"timestamp\": \"2026-09-01 11:55:40.281292\",\n\t\t\"traceId\": \"ef1cb56375\",\n\t\t\"bundleId\": \"VCR-20260901-57098420\",\n\t\t\"agentId\": \"DHABP00018\",\n\t\t\"version\": \"v1\"\n\t},\n\t\"resource\": {\n\t\t\"resourceType\": \"Bundle\",\n\t\t\"type\": \"transaction\",\n\t\t\"entry\": [\n\t\t\t{\n\t\t\t\t\"request\": {\n\t\t\t\t\t\"method\": \"PUT\",\n\t\t\t\t\t\"url\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\"\n\t\t\t\t},\n\t\t\t\t\"resource\": {\n\t\t\t\t\t\"resourceType\": \"Patient\",\n\t\t\t\t\t\"id\": \"KE-SHRP-170CDF0A-1363-4972-B36A\",\n\t\t\t\t\t\"gender\": \"male\",\n\t\t\t\t\t\"birthDate\": \"1998-12-23\",\n\t\t\t\t\t\"deceasedBoolean\": false,\n\t\t\t\t\t\"meta\": {\n\t\t\t\t\t\t\"security\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-Confidentiality\",\n\t\t\t\t\t\t\t\t\"code\": \"N\",\n\t\t\t\t\t\t\t\t\"display\": \"Normal\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"request\": {\n\t\t\t\t\t\"method\": \"PUT\",\n\t\t\t\t\t\"url\": \"Consent/VCR-20260901-57098420\"\n\t\t\t\t},\n\t\t\t\t\"resource\": {\n\t\t\t\t\t\"resourceType\": \"Consent\",\n\t\t\t\t\t\"id\": \"VCR-20260901-57098420\",\n\t\t\t\t\t\"meta\": {\n\t\t\t\t\t\t\"profile\": [\n\t\t\t\t\t\t\t\"https://nshr-uat.sha.go.ke/fhir/StructureDefinition/ke-consent\"\n\t\t\t\t\t\t],\n\t\t\t\t\t\t\"security\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-Confidentiality\",\n\t\t\t\t\t\t\t\t\"code\": \"N\",\n\t\t\t\t\t\t\t\t\"display\": \"Normal\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"text\": {\n\t\t\t\t\t\t\"status\": \"generated\",\n\t\t\t\t\t\t\"div\": \"<div xmlns=\\\"http://www.w3.org/1999/xhtml\\\">Consent to access patient records</div>\"\n\t\t\t\t\t},\n\t\t\t\t\t\"verification\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"verified\": false,\n\t\t\t\t\t\t\t\"extension\": [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\"url\": \"https://nshr-uat.sha.go.ke/fhir/StructureDefinition/consent-verification-channel\",\n\t\t\t\t\t\t\t\t\t\"valueCodeableConcept\": {\n\t\t\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\t\t\"system\": \"https://nshr-uat.sha.go.ke/fhir/CodeSystem/consent-verification-channel\",\n\t\t\t\t\t\t\t\t\t\t\t\t\"code\": \"otp\",\n\t\t\t\t\t\t\t\t\t\t\t\t\"display\": \"OTP\"\n\t\t\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"status\": \"proposed\",\n\t\t\t\t\t\"scope\": {\n\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentscope\",\n\t\t\t\t\t\t\t\t\"code\": \"patient-privacy\",\n\t\t\t\t\t\t\t\t\"display\": \"Privacy Consent\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"category\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\"system\": \"http://loinc.org\",\n\t\t\t\t\t\t\t\t\t\"code\": \"59284-0\",\n\t\t\t\t\t\t\t\t\t\"display\": \"Patient Consent\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"patient\": {\n\t\t\t\t\t\t\"reference\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\",\n\t\t\t\t\t\t\"display\": \"TIMOTHY NJIBU\"\n\t\t\t\t\t},\n\t\t\t\t\t\"dateTime\": \"2026-09-01T11:55:32.412581+00:00\",\n\t\t\t\t\t\"performer\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"reference\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\"\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"organization\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"reference\": \"Organization/KE-SHRF-D601602F-C9AC-4CC5-9347\",\n\t\t\t\t\t\t\t\"display\": \"KAMIRITHU ST. CHARLES LWANGA CATHOLIC HEALTH CENTRE\"\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"policyRule\": {\n\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentpolicycodes\",\n\t\t\t\t\t\t\t\t\"code\": \"hipaa-auth\",\n\t\t\t\t\t\t\t\t\"display\": \"HIPAA Authorization\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"provision\": {\n\t\t\t\t\t\t\"type\": \"permit\",\n\t\t\t\t\t\t\"period\": {\n\t\t\t\t\t\t\t\"start\": \"2026-09-01\"\n\t\t\t\t\t\t},\n\t\t\t\t\t\t\"action\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"access\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Access\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"collect\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Collect\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"use\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Use\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t],\n\t\t\t\t\t\t\"purpose\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"TREAT\",\n\t\t\t\t\t\t\t\t\"display\": \"Treatment\"\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"HPAYMT\",\n\t\t\t\t\t\t\t\t\"display\": \"Healthcare Payment\"\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"HOPERAT\",\n\t\t\t\t\t\t\t\t\"display\": \"Healthcare Operations\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t]\n\t}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{gateway_base_url}}/inbound",
+              "host": [
+                "{{gateway_base_url}}"
+              ],
+              "path": [
+                "inbound"
+              ]
+            },
+            "description": "This is the real production-shaped flow: Postman sends HTTP Basic Auth credentials (a real Keycloak user, NOT the adaptor's own credentials) straight to the CCE Gateway. The gateway itself exchanges those Basic credentials for a Keycloak access token (OAuth2 resource-owner-password grant, via a dedicated confidential client the gateway holds - Postman never sees that client secret), validates the resulting JWT, checks the caller's realm role against the gateway's own api_permissions table for POST /inbound, and only then forwards the request to the tibERbu adaptor - which forwards it again to the real Collector, exactly as in folder 3.\n\nRequires: BASIC_AUTH_ENABLED=true on gateway-service, a confidential Keycloak client with Direct Access Grants enabled, a POST /inbound route wired to the adaptor with the JwtValidationFilter, and a matching api_permissions row (permission name backed by a realm role the test user holds) - see the adaptor's own docs for exactly how this was set up."
+          },
+          "response": [
+            {
+              "name": "202 - forwarded (via gateway)",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "auth": {
+                  "type": "basic",
+                  "basic": [
+                    {
+                      "key": "username",
+                      "value": "{{gateway_basic_auth_username}}",
+                      "type": "string"
+                    },
+                    {
+                      "key": "password",
+                      "value": "{{gateway_basic_auth_password}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n\t\"meta\": {\n\t\t\"resourceType\": \"Bundle\",\n\t\t\"resourceId\": \"VCR-20260901-57098420\",\n\t\t\"event\": \"upserted\",\n\t\t\"source\": \"shr-mediator\",\n\t\t\"timestamp\": \"2026-09-01 11:55:40.281292\",\n\t\t\"traceId\": \"ef1cb56375\",\n\t\t\"bundleId\": \"VCR-20260901-57098420\",\n\t\t\"agentId\": \"DHABP00018\",\n\t\t\"version\": \"v1\"\n\t},\n\t\"resource\": {\n\t\t\"resourceType\": \"Bundle\",\n\t\t\"type\": \"transaction\",\n\t\t\"entry\": [\n\t\t\t{\n\t\t\t\t\"request\": {\n\t\t\t\t\t\"method\": \"PUT\",\n\t\t\t\t\t\"url\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\"\n\t\t\t\t},\n\t\t\t\t\"resource\": {\n\t\t\t\t\t\"resourceType\": \"Patient\",\n\t\t\t\t\t\"id\": \"KE-SHRP-170CDF0A-1363-4972-B36A\",\n\t\t\t\t\t\"gender\": \"male\",\n\t\t\t\t\t\"birthDate\": \"1998-12-23\",\n\t\t\t\t\t\"deceasedBoolean\": false,\n\t\t\t\t\t\"meta\": {\n\t\t\t\t\t\t\"security\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-Confidentiality\",\n\t\t\t\t\t\t\t\t\"code\": \"N\",\n\t\t\t\t\t\t\t\t\"display\": \"Normal\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"request\": {\n\t\t\t\t\t\"method\": \"PUT\",\n\t\t\t\t\t\"url\": \"Consent/VCR-20260901-57098420\"\n\t\t\t\t},\n\t\t\t\t\"resource\": {\n\t\t\t\t\t\"resourceType\": \"Consent\",\n\t\t\t\t\t\"id\": \"VCR-20260901-57098420\",\n\t\t\t\t\t\"meta\": {\n\t\t\t\t\t\t\"profile\": [\n\t\t\t\t\t\t\t\"https://nshr-uat.sha.go.ke/fhir/StructureDefinition/ke-consent\"\n\t\t\t\t\t\t],\n\t\t\t\t\t\t\"security\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-Confidentiality\",\n\t\t\t\t\t\t\t\t\"code\": \"N\",\n\t\t\t\t\t\t\t\t\"display\": \"Normal\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"text\": {\n\t\t\t\t\t\t\"status\": \"generated\",\n\t\t\t\t\t\t\"div\": \"<div xmlns=\\\"http://www.w3.org/1999/xhtml\\\">Consent to access patient records</div>\"\n\t\t\t\t\t},\n\t\t\t\t\t\"verification\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"verified\": false,\n\t\t\t\t\t\t\t\"extension\": [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\"url\": \"https://nshr-uat.sha.go.ke/fhir/StructureDefinition/consent-verification-channel\",\n\t\t\t\t\t\t\t\t\t\"valueCodeableConcept\": {\n\t\t\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\t\t\"system\": \"https://nshr-uat.sha.go.ke/fhir/CodeSystem/consent-verification-channel\",\n\t\t\t\t\t\t\t\t\t\t\t\t\"code\": \"otp\",\n\t\t\t\t\t\t\t\t\t\t\t\t\"display\": \"OTP\"\n\t\t\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"status\": \"proposed\",\n\t\t\t\t\t\"scope\": {\n\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentscope\",\n\t\t\t\t\t\t\t\t\"code\": \"patient-privacy\",\n\t\t\t\t\t\t\t\t\"display\": \"Privacy Consent\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"category\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\"system\": \"http://loinc.org\",\n\t\t\t\t\t\t\t\t\t\"code\": \"59284-0\",\n\t\t\t\t\t\t\t\t\t\"display\": \"Patient Consent\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"patient\": {\n\t\t\t\t\t\t\"reference\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\",\n\t\t\t\t\t\t\"display\": \"TIMOTHY NJIBU\"\n\t\t\t\t\t},\n\t\t\t\t\t\"dateTime\": \"2026-09-01T11:55:32.412581+00:00\",\n\t\t\t\t\t\"performer\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"reference\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\"\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"organization\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"reference\": \"Organization/KE-SHRF-D601602F-C9AC-4CC5-9347\",\n\t\t\t\t\t\t\t\"display\": \"KAMIRITHU ST. CHARLES LWANGA CATHOLIC HEALTH CENTRE\"\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"policyRule\": {\n\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentpolicycodes\",\n\t\t\t\t\t\t\t\t\"code\": \"hipaa-auth\",\n\t\t\t\t\t\t\t\t\"display\": \"HIPAA Authorization\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"provision\": {\n\t\t\t\t\t\t\"type\": \"permit\",\n\t\t\t\t\t\t\"period\": {\n\t\t\t\t\t\t\t\"start\": \"2026-09-01\"\n\t\t\t\t\t\t},\n\t\t\t\t\t\t\"action\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"access\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Access\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"collect\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Collect\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"use\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Use\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t],\n\t\t\t\t\t\t\"purpose\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"TREAT\",\n\t\t\t\t\t\t\t\t\"display\": \"Treatment\"\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"HPAYMT\",\n\t\t\t\t\t\t\t\t\"display\": \"Healthcare Payment\"\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"HOPERAT\",\n\t\t\t\t\t\t\t\t\"display\": \"Healthcare Operations\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t]\n\t}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{gateway_base_url}}/inbound",
+                  "host": [
+                    "{{gateway_base_url}}"
+                  ],
+                  "path": [
+                    "inbound"
+                  ]
+                },
+                "description": "This is the real production-shaped flow: Postman sends HTTP Basic Auth credentials (a real Keycloak user, NOT the adaptor's own credentials) straight to the CCE Gateway. The gateway itself exchanges those Basic credentials for a Keycloak access token (OAuth2 resource-owner-password grant, via a dedicated confidential client the gateway holds - Postman never sees that client secret), validates the resulting JWT, checks the caller's realm role against the gateway's own api_permissions table for POST /inbound, and only then forwards the request to the tibERbu adaptor - which forwards it again to the real Collector, exactly as in folder 3.\n\nRequires: BASIC_AUTH_ENABLED=true on gateway-service, a confidential Keycloak client with Direct Access Grants enabled, a POST /inbound route wired to the adaptor with the JwtValidationFilter, and a matching api_permissions row (permission name backed by a realm role the test user holds) - see the adaptor's own docs for exactly how this was set up."
+              },
+              "status": "Accepted",
+              "code": 202,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"status\": \"processed\",\n  \"eventsForwarded\": 1,\n  \"events\": [\n    {\n      \"entryIndex\": 1,\n      \"eventId\": \"11c1fb08-c324-5f5e-9076-9f61e16d38d3\",\n      \"type\": \"Consent\",\n      \"subject\": \"KE-SHRP-170CDF0A-1363-4972-B36A\",\n      \"outcome\": \"forwarded\",\n      \"collectorStatus\": \"duplicate\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "1.2 No Authorization Header - Rejected by Gateway",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{gateway_base_url}}/inbound",
+              "host": [
+                "{{gateway_base_url}}"
+              ],
+              "path": [
+                "inbound"
+              ]
+            },
+            "description": "No Authorization header at all - the gateway rejects it before the request ever reaches the adaptor."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Health & Metrics",
+      "item": [
+        {
+          "name": "2.1 Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "Overall health, including downstream disk/ping indicators."
+          },
+          "response": []
+        },
+        {
+          "name": "2.2 Liveness Probe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/health/liveness",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "actuator",
+                "health",
+                "liveness"
+              ]
+            },
+            "description": "Kubernetes liveness probe \u2014 process is alive."
+          },
+          "response": []
+        },
+        {
+          "name": "2.3 Readiness Probe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/health/readiness",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "actuator",
+                "health",
+                "readiness"
+              ]
+            },
+            "description": "Kubernetes readiness probe \u2014 ready to accept traffic."
+          },
+          "response": []
+        },
+        {
+          "name": "2.4 Prometheus Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/prometheus",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "actuator",
+                "prometheus"
+              ]
+            },
+            "description": "Scrape endpoint \u2014 tiberbu.cce.emitter.* counters/timers."
+          },
+          "response": []
+        },
+        {
+          "name": "2.5 Application Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/info",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "actuator",
+                "info"
+              ]
+            },
+            "description": "Application name/version metadata."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Successful Forwarding (202)",
+      "item": [
+        {
+          "name": "3.1 Consent - Verified (OTP)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"meta\": {\n\t\t\"resourceType\": \"Bundle\",\n\t\t\"resourceId\": \"VCR-20260901-57098420\",\n\t\t\"event\": \"upserted\",\n\t\t\"source\": \"shr-mediator\",\n\t\t\"timestamp\": \"2026-09-01 12:21:22.139444\",\n\t\t\"traceId\": \"8feb6c0fb2\",\n\t\t\"bundleId\": \"VCR-20260901-57098420\",\n\t\t\"agentId\": \"DHABP00018\",\n\t\t\"version\": \"v1\"\n\t},\n\t\"resource\": {\n\t\t\"resourceType\": \"Bundle\",\n\t\t\"type\": \"transaction\",\n\t\t\"entry\": [\n\t\t\t{\n\t\t\t\t\"request\": {\n\t\t\t\t\t\"method\": \"PUT\",\n\t\t\t\t\t\"url\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\"\n\t\t\t\t},\n\t\t\t\t\"resource\": {\n\t\t\t\t\t\"resourceType\": \"Patient\",\n\t\t\t\t\t\"id\": \"KE-SHRP-170CDF0A-1363-4972-B36A\",\n\t\t\t\t\t\"gender\": \"male\",\n\t\t\t\t\t\"birthDate\": \"1998-12-23\",\n\t\t\t\t\t\"deceasedBoolean\": false,\n\t\t\t\t\t\"meta\": {\n\t\t\t\t\t\t\"security\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-Confidentiality\",\n\t\t\t\t\t\t\t\t\"code\": \"N\",\n\t\t\t\t\t\t\t\t\"display\": \"Normal\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"request\": {\n\t\t\t\t\t\"method\": \"PUT\",\n\t\t\t\t\t\"url\": \"Consent/VCR-20260901-57098420\"\n\t\t\t\t},\n\t\t\t\t\"resource\": {\n\t\t\t\t\t\"resourceType\": \"Consent\",\n\t\t\t\t\t\"id\": \"VCR-20260901-57098420\",\n\t\t\t\t\t\"meta\": {\n\t\t\t\t\t\t\"profile\": [\n\t\t\t\t\t\t\t\"https://nshr-uat.sha.go.ke/fhir/StructureDefinition/ke-consent\"\n\t\t\t\t\t\t],\n\t\t\t\t\t\t\"lastUpdated\": \"2026-09-01T12:21:18.706261+00:00\",\n\t\t\t\t\t\t\"security\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-Confidentiality\",\n\t\t\t\t\t\t\t\t\"code\": \"N\",\n\t\t\t\t\t\t\t\t\"display\": \"Normal\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"text\": {\n\t\t\t\t\t\t\"status\": \"generated\",\n\t\t\t\t\t\t\"div\": \"<div xmlns=\\\"http://www.w3.org/1999/xhtml\\\">Consent to access patient records</div>\"\n\t\t\t\t\t},\n\t\t\t\t\t\"verification\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"verified\": true,\n\t\t\t\t\t\t\t\"extension\": [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\"url\": \"https://nshr-uat.sha.go.ke/fhir/StructureDefinition/consent-verification-channel\",\n\t\t\t\t\t\t\t\t\t\"valueCodeableConcept\": {\n\t\t\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\t\t\"system\": \"https://nshr-uat.sha.go.ke/fhir/CodeSystem/consent-verification-channel\",\n\t\t\t\t\t\t\t\t\t\t\t\t\"code\": \"otp\",\n\t\t\t\t\t\t\t\t\t\t\t\t\"display\": \"OTP\"\n\t\t\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t],\n\t\t\t\t\t\t\t\"verificationDate\": \"2026-09-01T12:21:18.706268+00:00\"\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"status\": \"active\",\n\t\t\t\t\t\"scope\": {\n\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentscope\",\n\t\t\t\t\t\t\t\t\"code\": \"patient-privacy\",\n\t\t\t\t\t\t\t\t\"display\": \"Privacy Consent\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"category\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\"system\": \"http://loinc.org\",\n\t\t\t\t\t\t\t\t\t\"code\": \"59284-0\",\n\t\t\t\t\t\t\t\t\t\"display\": \"Patient Consent\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"patient\": {\n\t\t\t\t\t\t\"reference\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\",\n\t\t\t\t\t\t\"display\": \"TIMOTHY NJIBU\"\n\t\t\t\t\t},\n\t\t\t\t\t\"dateTime\": \"2026-09-01T11:55:32.412581+00:00\",\n\t\t\t\t\t\"performer\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"reference\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\"\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"organization\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"reference\": \"Organization/KE-SHRF-D601602F-C9AC-4CC5-9347\",\n\t\t\t\t\t\t\t\"display\": \"KAMIRITHU ST. CHARLES LWANGA CATHOLIC HEALTH CENTRE\"\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"policyRule\": {\n\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentpolicycodes\",\n\t\t\t\t\t\t\t\t\"code\": \"hipaa-auth\",\n\t\t\t\t\t\t\t\t\"display\": \"HIPAA Authorization\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"provision\": {\n\t\t\t\t\t\t\"type\": \"permit\",\n\t\t\t\t\t\t\"period\": {\n\t\t\t\t\t\t\t\"start\": \"2026-09-01\"\n\t\t\t\t\t\t},\n\t\t\t\t\t\t\"action\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"access\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Access\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"collect\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Collect\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"use\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Use\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t],\n\t\t\t\t\t\t\"purpose\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"TREAT\",\n\t\t\t\t\t\t\t\t\"display\": \"Treatment\"\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"HPAYMT\",\n\t\t\t\t\t\t\t\t\"display\": \"Healthcare Payment\"\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"HOPERAT\",\n\t\t\t\t\t\t\t\t\"display\": \"Healthcare Operations\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t]\n\t}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/inbound",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inbound"
+              ]
+            },
+            "description": "Real tibERbu envelope from artifacts/'Consent Payload Structures - Verified Consent.json' - a Patient entry (skipped) plus a fully OTP-verified Consent. Both entries are the exact same resource IDs on every run, so re-sending this request a second time returns collectorStatus: \"duplicate\" instead of \"accepted\" (see 2.1b below) - that's the real Collector's own dedup, not a canned response."
+          },
+          "response": [
+            {
+              "name": "202 - forwarded (first send)",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n\t\"meta\": {\n\t\t\"resourceType\": \"Bundle\",\n\t\t\"resourceId\": \"VCR-20260901-57098420\",\n\t\t\"event\": \"upserted\",\n\t\t\"source\": \"shr-mediator\",\n\t\t\"timestamp\": \"2026-09-01 12:21:22.139444\",\n\t\t\"traceId\": \"8feb6c0fb2\",\n\t\t\"bundleId\": \"VCR-20260901-57098420\",\n\t\t\"agentId\": \"DHABP00018\",\n\t\t\"version\": \"v1\"\n\t},\n\t\"resource\": {\n\t\t\"resourceType\": \"Bundle\",\n\t\t\"type\": \"transaction\",\n\t\t\"entry\": [\n\t\t\t{\n\t\t\t\t\"request\": {\n\t\t\t\t\t\"method\": \"PUT\",\n\t\t\t\t\t\"url\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\"\n\t\t\t\t},\n\t\t\t\t\"resource\": {\n\t\t\t\t\t\"resourceType\": \"Patient\",\n\t\t\t\t\t\"id\": \"KE-SHRP-170CDF0A-1363-4972-B36A\",\n\t\t\t\t\t\"gender\": \"male\",\n\t\t\t\t\t\"birthDate\": \"1998-12-23\",\n\t\t\t\t\t\"deceasedBoolean\": false,\n\t\t\t\t\t\"meta\": {\n\t\t\t\t\t\t\"security\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-Confidentiality\",\n\t\t\t\t\t\t\t\t\"code\": \"N\",\n\t\t\t\t\t\t\t\t\"display\": \"Normal\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"request\": {\n\t\t\t\t\t\"method\": \"PUT\",\n\t\t\t\t\t\"url\": \"Consent/VCR-20260901-57098420\"\n\t\t\t\t},\n\t\t\t\t\"resource\": {\n\t\t\t\t\t\"resourceType\": \"Consent\",\n\t\t\t\t\t\"id\": \"VCR-20260901-57098420\",\n\t\t\t\t\t\"meta\": {\n\t\t\t\t\t\t\"profile\": [\n\t\t\t\t\t\t\t\"https://nshr-uat.sha.go.ke/fhir/StructureDefinition/ke-consent\"\n\t\t\t\t\t\t],\n\t\t\t\t\t\t\"lastUpdated\": \"2026-09-01T12:21:18.706261+00:00\",\n\t\t\t\t\t\t\"security\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-Confidentiality\",\n\t\t\t\t\t\t\t\t\"code\": \"N\",\n\t\t\t\t\t\t\t\t\"display\": \"Normal\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"text\": {\n\t\t\t\t\t\t\"status\": \"generated\",\n\t\t\t\t\t\t\"div\": \"<div xmlns=\\\"http://www.w3.org/1999/xhtml\\\">Consent to access patient records</div>\"\n\t\t\t\t\t},\n\t\t\t\t\t\"verification\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"verified\": true,\n\t\t\t\t\t\t\t\"extension\": [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\"url\": \"https://nshr-uat.sha.go.ke/fhir/StructureDefinition/consent-verification-channel\",\n\t\t\t\t\t\t\t\t\t\"valueCodeableConcept\": {\n\t\t\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\t\t\"system\": \"https://nshr-uat.sha.go.ke/fhir/CodeSystem/consent-verification-channel\",\n\t\t\t\t\t\t\t\t\t\t\t\t\"code\": \"otp\",\n\t\t\t\t\t\t\t\t\t\t\t\t\"display\": \"OTP\"\n\t\t\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t],\n\t\t\t\t\t\t\t\"verificationDate\": \"2026-09-01T12:21:18.706268+00:00\"\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"status\": \"active\",\n\t\t\t\t\t\"scope\": {\n\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentscope\",\n\t\t\t\t\t\t\t\t\"code\": \"patient-privacy\",\n\t\t\t\t\t\t\t\t\"display\": \"Privacy Consent\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"category\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\"system\": \"http://loinc.org\",\n\t\t\t\t\t\t\t\t\t\"code\": \"59284-0\",\n\t\t\t\t\t\t\t\t\t\"display\": \"Patient Consent\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"patient\": {\n\t\t\t\t\t\t\"reference\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\",\n\t\t\t\t\t\t\"display\": \"TIMOTHY NJIBU\"\n\t\t\t\t\t},\n\t\t\t\t\t\"dateTime\": \"2026-09-01T11:55:32.412581+00:00\",\n\t\t\t\t\t\"performer\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"reference\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\"\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"organization\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"reference\": \"Organization/KE-SHRF-D601602F-C9AC-4CC5-9347\",\n\t\t\t\t\t\t\t\"display\": \"KAMIRITHU ST. CHARLES LWANGA CATHOLIC HEALTH CENTRE\"\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"policyRule\": {\n\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentpolicycodes\",\n\t\t\t\t\t\t\t\t\"code\": \"hipaa-auth\",\n\t\t\t\t\t\t\t\t\"display\": \"HIPAA Authorization\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"provision\": {\n\t\t\t\t\t\t\"type\": \"permit\",\n\t\t\t\t\t\t\"period\": {\n\t\t\t\t\t\t\t\"start\": \"2026-09-01\"\n\t\t\t\t\t\t},\n\t\t\t\t\t\t\"action\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"access\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Access\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"collect\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Collect\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"use\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Use\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t],\n\t\t\t\t\t\t\"purpose\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"TREAT\",\n\t\t\t\t\t\t\t\t\"display\": \"Treatment\"\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"HPAYMT\",\n\t\t\t\t\t\t\t\t\"display\": \"Healthcare Payment\"\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"HOPERAT\",\n\t\t\t\t\t\t\t\t\"display\": \"Healthcare Operations\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t]\n\t}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/inbound",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "inbound"
+                  ]
+                },
+                "description": "Real tibERbu envelope from artifacts/'Consent Payload Structures - Verified Consent.json' - a Patient entry (skipped) plus a fully OTP-verified Consent. Both entries are the exact same resource IDs on every run, so re-sending this request a second time returns collectorStatus: \"duplicate\" instead of \"accepted\" (see 2.1b below) - that's the real Collector's own dedup, not a canned response."
+              },
+              "status": "Accepted",
+              "code": 202,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"status\": \"processed\",\n  \"eventsForwarded\": 1,\n  \"events\": [\n    {\n      \"entryIndex\": 1,\n      \"eventId\": \"bb32863b-7a6b-58df-af77-1cd46ea2ad10\",\n      \"type\": \"Consent\",\n      \"subject\": \"KE-SHRP-170CDF0A-1363-4972-B36A\",\n      \"outcome\": \"forwarded\",\n      \"collectorStatus\": \"accepted\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "3.1b Consent - Verified (OTP) - resend, duplicate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"meta\": {\n\t\t\"resourceType\": \"Bundle\",\n\t\t\"resourceId\": \"VCR-20260901-57098420\",\n\t\t\"event\": \"upserted\",\n\t\t\"source\": \"shr-mediator\",\n\t\t\"timestamp\": \"2026-09-01 12:21:22.139444\",\n\t\t\"traceId\": \"8feb6c0fb2\",\n\t\t\"bundleId\": \"VCR-20260901-57098420\",\n\t\t\"agentId\": \"DHABP00018\",\n\t\t\"version\": \"v1\"\n\t},\n\t\"resource\": {\n\t\t\"resourceType\": \"Bundle\",\n\t\t\"type\": \"transaction\",\n\t\t\"entry\": [\n\t\t\t{\n\t\t\t\t\"request\": {\n\t\t\t\t\t\"method\": \"PUT\",\n\t\t\t\t\t\"url\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\"\n\t\t\t\t},\n\t\t\t\t\"resource\": {\n\t\t\t\t\t\"resourceType\": \"Patient\",\n\t\t\t\t\t\"id\": \"KE-SHRP-170CDF0A-1363-4972-B36A\",\n\t\t\t\t\t\"gender\": \"male\",\n\t\t\t\t\t\"birthDate\": \"1998-12-23\",\n\t\t\t\t\t\"deceasedBoolean\": false,\n\t\t\t\t\t\"meta\": {\n\t\t\t\t\t\t\"security\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-Confidentiality\",\n\t\t\t\t\t\t\t\t\"code\": \"N\",\n\t\t\t\t\t\t\t\t\"display\": \"Normal\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"request\": {\n\t\t\t\t\t\"method\": \"PUT\",\n\t\t\t\t\t\"url\": \"Consent/VCR-20260901-57098420\"\n\t\t\t\t},\n\t\t\t\t\"resource\": {\n\t\t\t\t\t\"resourceType\": \"Consent\",\n\t\t\t\t\t\"id\": \"VCR-20260901-57098420\",\n\t\t\t\t\t\"meta\": {\n\t\t\t\t\t\t\"profile\": [\n\t\t\t\t\t\t\t\"https://nshr-uat.sha.go.ke/fhir/StructureDefinition/ke-consent\"\n\t\t\t\t\t\t],\n\t\t\t\t\t\t\"lastUpdated\": \"2026-09-01T12:21:18.706261+00:00\",\n\t\t\t\t\t\t\"security\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-Confidentiality\",\n\t\t\t\t\t\t\t\t\"code\": \"N\",\n\t\t\t\t\t\t\t\t\"display\": \"Normal\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"text\": {\n\t\t\t\t\t\t\"status\": \"generated\",\n\t\t\t\t\t\t\"div\": \"<div xmlns=\\\"http://www.w3.org/1999/xhtml\\\">Consent to access patient records</div>\"\n\t\t\t\t\t},\n\t\t\t\t\t\"verification\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"verified\": true,\n\t\t\t\t\t\t\t\"extension\": [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\"url\": \"https://nshr-uat.sha.go.ke/fhir/StructureDefinition/consent-verification-channel\",\n\t\t\t\t\t\t\t\t\t\"valueCodeableConcept\": {\n\t\t\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\t\t\"system\": \"https://nshr-uat.sha.go.ke/fhir/CodeSystem/consent-verification-channel\",\n\t\t\t\t\t\t\t\t\t\t\t\t\"code\": \"otp\",\n\t\t\t\t\t\t\t\t\t\t\t\t\"display\": \"OTP\"\n\t\t\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t],\n\t\t\t\t\t\t\t\"verificationDate\": \"2026-09-01T12:21:18.706268+00:00\"\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"status\": \"active\",\n\t\t\t\t\t\"scope\": {\n\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentscope\",\n\t\t\t\t\t\t\t\t\"code\": \"patient-privacy\",\n\t\t\t\t\t\t\t\t\"display\": \"Privacy Consent\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"category\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\"system\": \"http://loinc.org\",\n\t\t\t\t\t\t\t\t\t\"code\": \"59284-0\",\n\t\t\t\t\t\t\t\t\t\"display\": \"Patient Consent\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"patient\": {\n\t\t\t\t\t\t\"reference\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\",\n\t\t\t\t\t\t\"display\": \"TIMOTHY NJIBU\"\n\t\t\t\t\t},\n\t\t\t\t\t\"dateTime\": \"2026-09-01T11:55:32.412581+00:00\",\n\t\t\t\t\t\"performer\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"reference\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\"\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"organization\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"reference\": \"Organization/KE-SHRF-D601602F-C9AC-4CC5-9347\",\n\t\t\t\t\t\t\t\"display\": \"KAMIRITHU ST. CHARLES LWANGA CATHOLIC HEALTH CENTRE\"\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"policyRule\": {\n\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentpolicycodes\",\n\t\t\t\t\t\t\t\t\"code\": \"hipaa-auth\",\n\t\t\t\t\t\t\t\t\"display\": \"HIPAA Authorization\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"provision\": {\n\t\t\t\t\t\t\"type\": \"permit\",\n\t\t\t\t\t\t\"period\": {\n\t\t\t\t\t\t\t\"start\": \"2026-09-01\"\n\t\t\t\t\t\t},\n\t\t\t\t\t\t\"action\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"access\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Access\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"collect\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Collect\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"use\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Use\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t],\n\t\t\t\t\t\t\"purpose\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"TREAT\",\n\t\t\t\t\t\t\t\t\"display\": \"Treatment\"\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"HPAYMT\",\n\t\t\t\t\t\t\t\t\"display\": \"Healthcare Payment\"\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"HOPERAT\",\n\t\t\t\t\t\t\t\t\"display\": \"Healthcare Operations\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t]\n\t}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/inbound",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inbound"
+              ]
+            },
+            "description": "The exact same request as 2.1, sent again. Same deterministic CloudEvents id, so the real Collector reports it as an already-ingested duplicate - still outcome: \"forwarded\" and still 202, since a duplicate is a successful outcome, just not a new one."
+          },
+          "response": [
+            {
+              "name": "202 - forwarded (duplicate)",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n\t\"meta\": {\n\t\t\"resourceType\": \"Bundle\",\n\t\t\"resourceId\": \"VCR-20260901-57098420\",\n\t\t\"event\": \"upserted\",\n\t\t\"source\": \"shr-mediator\",\n\t\t\"timestamp\": \"2026-09-01 12:21:22.139444\",\n\t\t\"traceId\": \"8feb6c0fb2\",\n\t\t\"bundleId\": \"VCR-20260901-57098420\",\n\t\t\"agentId\": \"DHABP00018\",\n\t\t\"version\": \"v1\"\n\t},\n\t\"resource\": {\n\t\t\"resourceType\": \"Bundle\",\n\t\t\"type\": \"transaction\",\n\t\t\"entry\": [\n\t\t\t{\n\t\t\t\t\"request\": {\n\t\t\t\t\t\"method\": \"PUT\",\n\t\t\t\t\t\"url\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\"\n\t\t\t\t},\n\t\t\t\t\"resource\": {\n\t\t\t\t\t\"resourceType\": \"Patient\",\n\t\t\t\t\t\"id\": \"KE-SHRP-170CDF0A-1363-4972-B36A\",\n\t\t\t\t\t\"gender\": \"male\",\n\t\t\t\t\t\"birthDate\": \"1998-12-23\",\n\t\t\t\t\t\"deceasedBoolean\": false,\n\t\t\t\t\t\"meta\": {\n\t\t\t\t\t\t\"security\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-Confidentiality\",\n\t\t\t\t\t\t\t\t\"code\": \"N\",\n\t\t\t\t\t\t\t\t\"display\": \"Normal\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"request\": {\n\t\t\t\t\t\"method\": \"PUT\",\n\t\t\t\t\t\"url\": \"Consent/VCR-20260901-57098420\"\n\t\t\t\t},\n\t\t\t\t\"resource\": {\n\t\t\t\t\t\"resourceType\": \"Consent\",\n\t\t\t\t\t\"id\": \"VCR-20260901-57098420\",\n\t\t\t\t\t\"meta\": {\n\t\t\t\t\t\t\"profile\": [\n\t\t\t\t\t\t\t\"https://nshr-uat.sha.go.ke/fhir/StructureDefinition/ke-consent\"\n\t\t\t\t\t\t],\n\t\t\t\t\t\t\"lastUpdated\": \"2026-09-01T12:21:18.706261+00:00\",\n\t\t\t\t\t\t\"security\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-Confidentiality\",\n\t\t\t\t\t\t\t\t\"code\": \"N\",\n\t\t\t\t\t\t\t\t\"display\": \"Normal\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"text\": {\n\t\t\t\t\t\t\"status\": \"generated\",\n\t\t\t\t\t\t\"div\": \"<div xmlns=\\\"http://www.w3.org/1999/xhtml\\\">Consent to access patient records</div>\"\n\t\t\t\t\t},\n\t\t\t\t\t\"verification\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"verified\": true,\n\t\t\t\t\t\t\t\"extension\": [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\"url\": \"https://nshr-uat.sha.go.ke/fhir/StructureDefinition/consent-verification-channel\",\n\t\t\t\t\t\t\t\t\t\"valueCodeableConcept\": {\n\t\t\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\t\t\"system\": \"https://nshr-uat.sha.go.ke/fhir/CodeSystem/consent-verification-channel\",\n\t\t\t\t\t\t\t\t\t\t\t\t\"code\": \"otp\",\n\t\t\t\t\t\t\t\t\t\t\t\t\"display\": \"OTP\"\n\t\t\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t],\n\t\t\t\t\t\t\t\"verificationDate\": \"2026-09-01T12:21:18.706268+00:00\"\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"status\": \"active\",\n\t\t\t\t\t\"scope\": {\n\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentscope\",\n\t\t\t\t\t\t\t\t\"code\": \"patient-privacy\",\n\t\t\t\t\t\t\t\t\"display\": \"Privacy Consent\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"category\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\"system\": \"http://loinc.org\",\n\t\t\t\t\t\t\t\t\t\"code\": \"59284-0\",\n\t\t\t\t\t\t\t\t\t\"display\": \"Patient Consent\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"patient\": {\n\t\t\t\t\t\t\"reference\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\",\n\t\t\t\t\t\t\"display\": \"TIMOTHY NJIBU\"\n\t\t\t\t\t},\n\t\t\t\t\t\"dateTime\": \"2026-09-01T11:55:32.412581+00:00\",\n\t\t\t\t\t\"performer\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"reference\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\"\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"organization\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"reference\": \"Organization/KE-SHRF-D601602F-C9AC-4CC5-9347\",\n\t\t\t\t\t\t\t\"display\": \"KAMIRITHU ST. CHARLES LWANGA CATHOLIC HEALTH CENTRE\"\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"policyRule\": {\n\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentpolicycodes\",\n\t\t\t\t\t\t\t\t\"code\": \"hipaa-auth\",\n\t\t\t\t\t\t\t\t\"display\": \"HIPAA Authorization\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"provision\": {\n\t\t\t\t\t\t\"type\": \"permit\",\n\t\t\t\t\t\t\"period\": {\n\t\t\t\t\t\t\t\"start\": \"2026-09-01\"\n\t\t\t\t\t\t},\n\t\t\t\t\t\t\"action\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"access\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Access\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"collect\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Collect\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"use\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Use\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t],\n\t\t\t\t\t\t\"purpose\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"TREAT\",\n\t\t\t\t\t\t\t\t\"display\": \"Treatment\"\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"HPAYMT\",\n\t\t\t\t\t\t\t\t\"display\": \"Healthcare Payment\"\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"HOPERAT\",\n\t\t\t\t\t\t\t\t\"display\": \"Healthcare Operations\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t]\n\t}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/inbound",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "inbound"
+                  ]
+                },
+                "description": "The exact same request as 2.1, sent again. Same deterministic CloudEvents id, so the real Collector reports it as an already-ingested duplicate - still outcome: \"forwarded\" and still 202, since a duplicate is a successful outcome, just not a new one."
+              },
+              "status": "Accepted",
+              "code": 202,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"status\": \"processed\",\n  \"eventsForwarded\": 1,\n  \"events\": [\n    {\n      \"entryIndex\": 1,\n      \"eventId\": \"bb32863b-7a6b-58df-af77-1cd46ea2ad10\",\n      \"type\": \"Consent\",\n      \"subject\": \"KE-SHRP-170CDF0A-1363-4972-B36A\",\n      \"outcome\": \"forwarded\",\n      \"collectorStatus\": \"duplicate\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "3.2 Consent - Proposed (Unverified OTP)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"meta\": {\n\t\t\"resourceType\": \"Bundle\",\n\t\t\"resourceId\": \"VCR-20260901-57098420\",\n\t\t\"event\": \"upserted\",\n\t\t\"source\": \"shr-mediator\",\n\t\t\"timestamp\": \"2026-09-01 11:55:40.281292\",\n\t\t\"traceId\": \"ef1cb56375\",\n\t\t\"bundleId\": \"VCR-20260901-57098420\",\n\t\t\"agentId\": \"DHABP00018\",\n\t\t\"version\": \"v1\"\n\t},\n\t\"resource\": {\n\t\t\"resourceType\": \"Bundle\",\n\t\t\"type\": \"transaction\",\n\t\t\"entry\": [\n\t\t\t{\n\t\t\t\t\"request\": {\n\t\t\t\t\t\"method\": \"PUT\",\n\t\t\t\t\t\"url\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\"\n\t\t\t\t},\n\t\t\t\t\"resource\": {\n\t\t\t\t\t\"resourceType\": \"Patient\",\n\t\t\t\t\t\"id\": \"KE-SHRP-170CDF0A-1363-4972-B36A\",\n\t\t\t\t\t\"gender\": \"male\",\n\t\t\t\t\t\"birthDate\": \"1998-12-23\",\n\t\t\t\t\t\"deceasedBoolean\": false,\n\t\t\t\t\t\"meta\": {\n\t\t\t\t\t\t\"security\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-Confidentiality\",\n\t\t\t\t\t\t\t\t\"code\": \"N\",\n\t\t\t\t\t\t\t\t\"display\": \"Normal\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"request\": {\n\t\t\t\t\t\"method\": \"PUT\",\n\t\t\t\t\t\"url\": \"Consent/VCR-20260901-57098420\"\n\t\t\t\t},\n\t\t\t\t\"resource\": {\n\t\t\t\t\t\"resourceType\": \"Consent\",\n\t\t\t\t\t\"id\": \"VCR-20260901-57098420\",\n\t\t\t\t\t\"meta\": {\n\t\t\t\t\t\t\"profile\": [\n\t\t\t\t\t\t\t\"https://nshr-uat.sha.go.ke/fhir/StructureDefinition/ke-consent\"\n\t\t\t\t\t\t],\n\t\t\t\t\t\t\"security\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-Confidentiality\",\n\t\t\t\t\t\t\t\t\"code\": \"N\",\n\t\t\t\t\t\t\t\t\"display\": \"Normal\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"text\": {\n\t\t\t\t\t\t\"status\": \"generated\",\n\t\t\t\t\t\t\"div\": \"<div xmlns=\\\"http://www.w3.org/1999/xhtml\\\">Consent to access patient records</div>\"\n\t\t\t\t\t},\n\t\t\t\t\t\"verification\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"verified\": false,\n\t\t\t\t\t\t\t\"extension\": [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\"url\": \"https://nshr-uat.sha.go.ke/fhir/StructureDefinition/consent-verification-channel\",\n\t\t\t\t\t\t\t\t\t\"valueCodeableConcept\": {\n\t\t\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\t\t\"system\": \"https://nshr-uat.sha.go.ke/fhir/CodeSystem/consent-verification-channel\",\n\t\t\t\t\t\t\t\t\t\t\t\t\"code\": \"otp\",\n\t\t\t\t\t\t\t\t\t\t\t\t\"display\": \"OTP\"\n\t\t\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"status\": \"proposed\",\n\t\t\t\t\t\"scope\": {\n\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentscope\",\n\t\t\t\t\t\t\t\t\"code\": \"patient-privacy\",\n\t\t\t\t\t\t\t\t\"display\": \"Privacy Consent\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"category\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\"system\": \"http://loinc.org\",\n\t\t\t\t\t\t\t\t\t\"code\": \"59284-0\",\n\t\t\t\t\t\t\t\t\t\"display\": \"Patient Consent\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"patient\": {\n\t\t\t\t\t\t\"reference\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\",\n\t\t\t\t\t\t\"display\": \"TIMOTHY NJIBU\"\n\t\t\t\t\t},\n\t\t\t\t\t\"dateTime\": \"2026-09-01T11:55:32.412581+00:00\",\n\t\t\t\t\t\"performer\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"reference\": \"Patient/KE-SHRP-170CDF0A-1363-4972-B36A\"\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"organization\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"reference\": \"Organization/KE-SHRF-D601602F-C9AC-4CC5-9347\",\n\t\t\t\t\t\t\t\"display\": \"KAMIRITHU ST. CHARLES LWANGA CATHOLIC HEALTH CENTRE\"\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"policyRule\": {\n\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentpolicycodes\",\n\t\t\t\t\t\t\t\t\"code\": \"hipaa-auth\",\n\t\t\t\t\t\t\t\t\"display\": \"HIPAA Authorization\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t},\n\t\t\t\t\t\"provision\": {\n\t\t\t\t\t\t\"type\": \"permit\",\n\t\t\t\t\t\t\"period\": {\n\t\t\t\t\t\t\t\"start\": \"2026-09-01\"\n\t\t\t\t\t\t},\n\t\t\t\t\t\t\"action\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"access\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Access\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"collect\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Collect\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"coding\": [\n\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/consentaction\",\n\t\t\t\t\t\t\t\t\t\t\"code\": \"use\",\n\t\t\t\t\t\t\t\t\t\t\"display\": \"Use\"\n\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t],\n\t\t\t\t\t\t\"purpose\": [\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"TREAT\",\n\t\t\t\t\t\t\t\t\"display\": \"Treatment\"\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"HPAYMT\",\n\t\t\t\t\t\t\t\t\"display\": \"Healthcare Payment\"\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActReason\",\n\t\t\t\t\t\t\t\t\"code\": \"HOPERAT\",\n\t\t\t\t\t\t\t\t\"display\": \"Healthcare Operations\"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t]\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t]\n\t}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/inbound",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inbound"
+              ]
+            },
+            "description": "Real tibERbu envelope from artifacts/'Consent Payload Structures - OTP, Afyayangu, Biometrics.json' - status: \"proposed\", verification.verified: false. The adaptor forwards this identically to a verified Consent - verification state is business data on the resource, not something the adaptor branches on."
+          },
+          "response": []
+        },
+        {
+          "name": "3.3 Mixed Outcome - one forwarded, one failed",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"meta\": {\n    \"traceId\": \"postman-demo-mixed-001\"\n  },\n  \"resource\": {\n    \"resourceType\": \"Bundle\",\n    \"type\": \"transaction\",\n    \"entry\": [\n      {\n        \"request\": {\n          \"method\": \"PUT\",\n          \"url\": \"Patient/{{patient_id}}\"\n        },\n        \"resource\": {\n          \"resourceType\": \"Patient\",\n          \"id\": \"{{patient_id}}\",\n          \"gender\": \"male\"\n        }\n      },\n      {\n        \"request\": {\n          \"method\": \"PUT\",\n          \"url\": \"Consent/VCR-DEMO-MIXED-001\"\n        },\n        \"resource\": {\n          \"resourceType\": \"Consent\",\n          \"id\": \"VCR-DEMO-MIXED-001\",\n          \"status\": \"active\",\n          \"patient\": {\n            \"reference\": \"Patient/{{patient_id}}\"\n          },\n          \"organization\": [\n            {\n              \"reference\": \"Organization/{{facility_id}}\"\n            }\n          ]\n        }\n      },\n      {\n        \"request\": {\n          \"method\": \"POST\",\n          \"url\": \"Observation/obs-demo-001\"\n        },\n        \"resource\": {\n          \"resourceType\": \"Observation\",\n          \"id\": \"obs-demo-001\",\n          \"status\": \"final\"\n        }\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/inbound",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inbound"
+              ]
+            },
+            "description": "A 3-entry bundle: Patient (skipped), a valid Consent (forwards), and an Observation with no patient/subject reference at all (fails with PATIENT_ID_NOT_FOUND). Confirms the multi-entry policy: since at least one entry forwarded, the whole request is still 202 - the failed sibling entry's own reason is still visible in events[], it just doesn't change the overall status."
+          },
+          "response": [
+            {
+              "name": "Example response",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"meta\": {\n    \"traceId\": \"postman-demo-mixed-001\"\n  },\n  \"resource\": {\n    \"resourceType\": \"Bundle\",\n    \"type\": \"transaction\",\n    \"entry\": [\n      {\n        \"request\": {\n          \"method\": \"PUT\",\n          \"url\": \"Patient/{{patient_id}}\"\n        },\n        \"resource\": {\n          \"resourceType\": \"Patient\",\n          \"id\": \"{{patient_id}}\",\n          \"gender\": \"male\"\n        }\n      },\n      {\n        \"request\": {\n          \"method\": \"PUT\",\n          \"url\": \"Consent/VCR-DEMO-MIXED-001\"\n        },\n        \"resource\": {\n          \"resourceType\": \"Consent\",\n          \"id\": \"VCR-DEMO-MIXED-001\",\n          \"status\": \"active\",\n          \"patient\": {\n            \"reference\": \"Patient/{{patient_id}}\"\n          },\n          \"organization\": [\n            {\n              \"reference\": \"Organization/{{facility_id}}\"\n            }\n          ]\n        }\n      },\n      {\n        \"request\": {\n          \"method\": \"POST\",\n          \"url\": \"Observation/obs-demo-001\"\n        },\n        \"resource\": {\n          \"resourceType\": \"Observation\",\n          \"id\": \"obs-demo-001\",\n          \"status\": \"final\"\n        }\n      }\n    ]\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/inbound",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "inbound"
+                  ]
+                },
+                "description": "A 3-entry bundle: Patient (skipped), a valid Consent (forwards), and an Observation with no patient/subject reference at all (fails with PATIENT_ID_NOT_FOUND). Confirms the multi-entry policy: since at least one entry forwarded, the whole request is still 202 - the failed sibling entry's own reason is still visible in events[], it just doesn't change the overall status."
+              },
+              "status": "Accepted",
+              "code": 202,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"status\": \"processed\",\n  \"eventsForwarded\": 1,\n  \"events\": [\n    {\n      \"entryIndex\": 1,\n      \"eventId\": \"62990b5b-c73d-5ccf-98f0-e89a2e9bcdfd\",\n      \"type\": \"Consent\",\n      \"subject\": \"KE-SHRP-170CDF0A-1363-4972-B36A\",\n      \"outcome\": \"forwarded\",\n      \"collectorStatus\": \"accepted\"\n    },\n    {\n      \"entryIndex\": 2,\n      \"type\": \"Observation\",\n      \"outcome\": \"failed\",\n      \"reason\": \"No patient reference found in Observation resource\"\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Non-Error Outcomes (200)",
+      "item": [
+        {
+          "name": "4.1 Patient-Only Bundle - Ignored",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"meta\": {\n        \"resourceType\": \"\",\n        \"resourceId\": \"\",\n        \"event\": \"\",\n        \"source\": \"\",\n        \"timestamp\": \"\",\n        \"traceId\": \"\",\n        \"bundleId\": \"\",\n        \"agentId\": \"\",\n        \"version\": \"\"\n    },\n    \"resource\": {\n        \"resourceType\": \"Bundle\",\n        \"type\": \"transaction\",\n        \"entry\": [\n            {\n                \"request\": {\n                    \"method\": \"PUT\",\n                    \"url\": \"Patient/KE-SHRP-7E93454F-6D34-47C5-A6C2\"\n                },\n                \"resource\": {\n                    \"resourceType\": \"Patient\",\n                    \"id\": \"KE-SHRP-7E93454F-6D34-47C5-A6C2\",\n                    \"gender\": \"male\",\n                    \"birthDate\": \"1982-08-17\",\n                    \"deceasedBoolean\": false,\n                    \"meta\": {\n                        \"security\": [\n                            {\n                                \"system\": \"http://terminology.hl7.org/CodeSystem/v3-Confidentiality\",\n                                \"code\": \"N\",\n                                \"display\": \"Normal\"\n                            }\n                        ]\n                    }\n                }\n           \n            }\n        ]\n    }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/inbound",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inbound"
+              ]
+            },
+            "description": "Real tibERbu envelope from artifacts/kafka-sample-payload.json - the bundle carries only the Patient entry, so nothing remains to forward. This is the single most common \"ignored\" scenario in practice, per api-reference.md section 4.2."
+          },
+          "response": [
+            {
+              "name": "Example response",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"meta\": {\n        \"resourceType\": \"\",\n        \"resourceId\": \"\",\n        \"event\": \"\",\n        \"source\": \"\",\n        \"timestamp\": \"\",\n        \"traceId\": \"\",\n        \"bundleId\": \"\",\n        \"agentId\": \"\",\n        \"version\": \"\"\n    },\n    \"resource\": {\n        \"resourceType\": \"Bundle\",\n        \"type\": \"transaction\",\n        \"entry\": [\n            {\n                \"request\": {\n                    \"method\": \"PUT\",\n                    \"url\": \"Patient/KE-SHRP-7E93454F-6D34-47C5-A6C2\"\n                },\n                \"resource\": {\n                    \"resourceType\": \"Patient\",\n                    \"id\": \"KE-SHRP-7E93454F-6D34-47C5-A6C2\",\n                    \"gender\": \"male\",\n                    \"birthDate\": \"1982-08-17\",\n                    \"deceasedBoolean\": false,\n                    \"meta\": {\n                        \"security\": [\n                            {\n                                \"system\": \"http://terminology.hl7.org/CodeSystem/v3-Confidentiality\",\n                                \"code\": \"N\",\n                                \"display\": \"Normal\"\n                            }\n                        ]\n                    }\n                }\n           \n            }\n        ]\n    }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/inbound",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "inbound"
+                  ]
+                },
+                "description": "Real tibERbu envelope from artifacts/kafka-sample-payload.json - the bundle carries only the Patient entry, so nothing remains to forward. This is the single most common \"ignored\" scenario in practice, per api-reference.md section 4.2."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"status\": \"ignored\",\n  \"message\": \"Non-processable payload\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "4.2 Facility Filter - Skipped",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"meta\": {\n    \"traceId\": \"postman-demo-skipped-001\"\n  },\n  \"resource\": {\n    \"resourceType\": \"Bundle\",\n    \"type\": \"transaction\",\n    \"entry\": [\n      {\n        \"request\": {\n          \"method\": \"PUT\",\n          \"url\": \"Patient/{{patient_id}}\"\n        },\n        \"resource\": {\n          \"resourceType\": \"Patient\",\n          \"id\": \"{{patient_id}}\",\n          \"gender\": \"male\"\n        }\n      },\n      {\n        \"request\": {\n          \"method\": \"PUT\",\n          \"url\": \"Consent/VCR-DEMO-SKIPPED-001\"\n        },\n        \"resource\": {\n          \"resourceType\": \"Consent\",\n          \"id\": \"VCR-DEMO-SKIPPED-001\",\n          \"status\": \"active\",\n          \"patient\": {\n            \"reference\": \"Patient/{{patient_id}}\"\n          },\n          \"organization\": [\n            {\n              \"reference\": \"Organization/{{facility_id}}\"\n            }\n          ]\n        }\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/inbound",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inbound"
+              ]
+            },
+            "description": "Requires the adaptor to be started with FACILITY_FILTER_IDS set to an allowlist that does NOT include this payload's organization reference (KE-SHRF-D601602F-C9AC-4CC5-9347) - e.g. FACILITY_FILTER_IDS=9999. With the default empty allowlist (filter inactive) this request forwards instead; the saved example below was captured with FACILITY_FILTER_IDS=9999."
+          },
+          "response": [
+            {
+              "name": "Example response",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"meta\": {\n    \"traceId\": \"postman-demo-skipped-001\"\n  },\n  \"resource\": {\n    \"resourceType\": \"Bundle\",\n    \"type\": \"transaction\",\n    \"entry\": [\n      {\n        \"request\": {\n          \"method\": \"PUT\",\n          \"url\": \"Patient/{{patient_id}}\"\n        },\n        \"resource\": {\n          \"resourceType\": \"Patient\",\n          \"id\": \"{{patient_id}}\",\n          \"gender\": \"male\"\n        }\n      },\n      {\n        \"request\": {\n          \"method\": \"PUT\",\n          \"url\": \"Consent/VCR-DEMO-SKIPPED-001\"\n        },\n        \"resource\": {\n          \"resourceType\": \"Consent\",\n          \"id\": \"VCR-DEMO-SKIPPED-001\",\n          \"status\": \"active\",\n          \"patient\": {\n            \"reference\": \"Patient/{{patient_id}}\"\n          },\n          \"organization\": [\n            {\n              \"reference\": \"Organization/{{facility_id}}\"\n            }\n          ]\n        }\n      }\n    ]\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/inbound",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "inbound"
+                  ]
+                },
+                "description": "Requires the adaptor to be started with FACILITY_FILTER_IDS set to an allowlist that does NOT include this payload's organization reference (KE-SHRF-D601602F-C9AC-4CC5-9347) - e.g. FACILITY_FILTER_IDS=9999. With the default empty allowlist (filter inactive) this request forwards instead; the saved example below was captured with FACILITY_FILTER_IDS=9999."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"status\": \"skipped\",\n  \"eventsForwarded\": 0,\n  \"events\": [\n    {\n      \"entryIndex\": 1,\n      \"type\": \"Consent\",\n      \"subject\": \"KE-SHRP-170CDF0A-1363-4972-B36A\",\n      \"outcome\": \"skipped\",\n      \"reason\": \"Event skipped by facility filter: facilityId='KE-SHRF-D601602F-C9AC-4CC5-9347' source='tiberbu'\"\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Error Responses",
+      "item": [
+        {
+          "name": "5.1 Patient ID Not Found (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"meta\": {\n    \"traceId\": \"postman-demo-error-001\"\n  },\n  \"resource\": {\n    \"resourceType\": \"Bundle\",\n    \"type\": \"transaction\",\n    \"entry\": [\n      {\n        \"resource\": {\n          \"resourceType\": \"Observation\",\n          \"id\": \"obs-error-001\",\n          \"status\": \"final\"\n        }\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/inbound",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inbound"
+              ]
+            },
+            "description": "A single Observation entry with no subject/patient reference at all. Since it's the bundle's only candidate entry and it fails outright, there's nothing else to report as a success - the request surfaces as a genuine error instead of a 200/202."
+          },
+          "response": [
+            {
+              "name": "Example response",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"meta\": {\n    \"traceId\": \"postman-demo-error-001\"\n  },\n  \"resource\": {\n    \"resourceType\": \"Bundle\",\n    \"type\": \"transaction\",\n    \"entry\": [\n      {\n        \"resource\": {\n          \"resourceType\": \"Observation\",\n          \"id\": \"obs-error-001\",\n          \"status\": \"final\"\n        }\n      }\n    ]\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/inbound",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "inbound"
+                  ]
+                },
+                "description": "A single Observation entry with no subject/patient reference at all. Since it's the bundle's only candidate entry and it fails outright, there's nothing else to report as a success - the request surfaces as a genuine error instead of a 200/202."
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"PATIENT_ID_NOT_FOUND\",\n    \"message\": \"No patient reference found in Observation resource\"\n  },\n  \"timestamp\": \"2026-09-09T04:48:22.217146795Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "5.2 FHIR Mapping Error (422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"meta\": {\n    \"traceId\": \"postman-demo-fhir-error-001\"\n  },\n  \"resource\": {\n    \"resourceType\": \"Bundle\",\n    \"type\": \"transaction\",\n    \"entry\": [\n      {\n        \"resource\": {\n          \"resourceType\": \"Observation\",\n          \"id\": \"obs-bad-001\",\n          \"status\": 12345,\n          \"subject\": {\n            \"reference\": \"Patient/{{patient_id}}\"\n          }\n        }\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/inbound",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inbound"
+              ]
+            },
+            "description": "A single Observation entry whose status field is a number instead of a valid ObservationStatus code - valid JSON, but HAPI FHIR itself rejects it while parsing the resource."
+          },
+          "response": [
+            {
+              "name": "Example response",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"meta\": {\n    \"traceId\": \"postman-demo-fhir-error-001\"\n  },\n  \"resource\": {\n    \"resourceType\": \"Bundle\",\n    \"type\": \"transaction\",\n    \"entry\": [\n      {\n        \"resource\": {\n          \"resourceType\": \"Observation\",\n          \"id\": \"obs-bad-001\",\n          \"status\": 12345,\n          \"subject\": {\n            \"reference\": \"Patient/{{patient_id}}\"\n          }\n        }\n      }\n    ]\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/inbound",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "inbound"
+                  ]
+                },
+                "description": "A single Observation entry whose status field is a number instead of a valid ObservationStatus code - valid JSON, but HAPI FHIR itself rejects it while parsing the resource."
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"FHIR_MAPPING_ERROR\",\n    \"message\": \"Failed to parse FHIR resource JSON: HAPI-1821: [element=\\\"status\\\"] Invalid attribute value \\\"12345\\\": Unknown ObservationStatus code '12345'\"\n  },\n  \"timestamp\": \"2026-09-09T04:49:25.802045592Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "5.3 Method Not Allowed (405)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/inbound",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inbound"
+              ]
+            },
+            "description": "/inbound only maps POST. Any other method is rejected explicitly as 405, never as 500."
+          },
+          "response": [
+            {
+              "name": "405 - METHOD_NOT_ALLOWED",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/inbound",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "inbound"
+                  ]
+                }
+              },
+              "status": "Method Not Allowed",
+              "code": 405,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"METHOD_NOT_ALLOWED\",\n    \"message\": \"Request method 'GET' is not supported\"\n  },\n  \"timestamp\": \"2026-09-09T04:48:22.251861037Z\"\n}"
+            }
+          ]
+        }
+      ],
+      "description": "COLLECTOR_CLIENT_ERROR (4xx from the real Collector) and COLLECTOR_FORWARDING_ERROR (502, retries exhausted) are documented in api-reference.md section 4.5/4.8 but aren't included as runnable requests here - reproducing them needs the real Collector itself to reject or become unreachable, which isn't safe to script against a shared local instance."
+    }
+  ]
+}
