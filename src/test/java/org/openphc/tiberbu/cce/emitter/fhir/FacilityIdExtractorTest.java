@@ -13,6 +13,7 @@ import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Procedure;
 import org.hl7.fhir.r4.model.Reference;
+import org.hl7.fhir.r4.model.ServiceRequest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -28,15 +29,28 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Covers {@link FacilityIdExtractor}'s organization-reference resolution
  * (based on a real survey of every resource type actually seen in tibERbu's
- * production {@code inbound_event_log}), and the "always resolves to
- * something, never throws" contract.
+ * production {@code inbound_event_log}), its {@code display}-field name
+ * extraction, and the "always resolves to something, never throws" contract.
  *
- * <p>Only three resource types carry an accessor {@link FacilityIdExtractor}
+ * <p>Four resource types carry an accessor {@link FacilityIdExtractor}
  * recognizes — {@code Consent.organization}, {@code Encounter.serviceProvider},
- * {@code EpisodeOfCare.managingOrganization}. {@code MedicationDispense} and
- * {@code Procedure} carry a {@code location} reference instead, which points
- * at a {@code Location}, not an {@code Organization} — deliberately not
- * treated as equivalent; see {@link DeliberatelyUnsupportedResourceTypes}.
+ * {@code EpisodeOfCare.managingOrganization}, {@code ServiceRequest.performer}.
+ * {@code MedicationDispense} and {@code Procedure} carry a {@code location}
+ * reference instead, which points at a {@code Location}, not an {@code
+ * Organization} — deliberately not treated as equivalent; see {@link
+ * DeliberatelyUnsupportedResourceTypes}. {@code Observation} also declares
+ * {@code getPerformer()}, but real payloads populate it with {@code
+ * Practitioner/} references, never {@code Organization/} — see {@link
+ * ServiceRequestPerformerResolution} for the reference-type gate that keeps
+ * this correctly resolving to {@code null} rather than misattributing a
+ * practitioner as a facility.
+ *
+ * <p>Every hand-built {@link Reference} in this file below {@link
+ * RealTibErbuPayload} leaves {@code display} unset on purpose, so {@link
+ * #FACILITY_ID} alone identifies the expected result without repeating
+ * {@code new FacilityDetails(FACILITY_ID, null)} everywhere; name extraction
+ * itself is covered by {@link FacilityNameResolution} and by the real
+ * payloads in {@link RealTibErbuPayload}.
  */
 class FacilityIdExtractorTest {
 
@@ -54,7 +68,7 @@ class FacilityIdExtractorTest {
             Consent consent = new Consent();
             consent.setOrganization(List.of(new Reference("Organization/" + FACILITY_ID)));
 
-            assertThat(facilityIdExtractor.extract(consent)).isEqualTo(FACILITY_ID);
+            assertThat(facilityIdExtractor.extract(consent)).isEqualTo(new FacilityDetails(FACILITY_ID, null));
         }
 
         @Test
@@ -65,7 +79,7 @@ class FacilityIdExtractorTest {
                     new Reference("Organization/" + FACILITY_ID),
                     new Reference("Organization/should-not-be-used")));
 
-            assertThat(facilityIdExtractor.extract(consent)).isEqualTo(FACILITY_ID);
+            assertThat(facilityIdExtractor.extract(consent)).isEqualTo(new FacilityDetails(FACILITY_ID, null));
         }
 
         @Test
@@ -74,7 +88,7 @@ class FacilityIdExtractorTest {
             Consent consent = new Consent();
             consent.setOrganization(List.of(new Reference(), new Reference("Organization/" + FACILITY_ID)));
 
-            assertThat(facilityIdExtractor.extract(consent)).isEqualTo(FACILITY_ID);
+            assertThat(facilityIdExtractor.extract(consent)).isEqualTo(new FacilityDetails(FACILITY_ID, null));
         }
     }
 
@@ -88,7 +102,7 @@ class FacilityIdExtractorTest {
             Encounter encounter = new Encounter();
             encounter.setServiceProvider(new Reference("Organization/" + FACILITY_ID));
 
-            assertThat(facilityIdExtractor.extract(encounter)).isEqualTo(FACILITY_ID);
+            assertThat(facilityIdExtractor.extract(encounter)).isEqualTo(new FacilityDetails(FACILITY_ID, null));
         }
 
         @Test
@@ -108,13 +122,117 @@ class FacilityIdExtractorTest {
             EpisodeOfCare episodeOfCare = new EpisodeOfCare();
             episodeOfCare.setManagingOrganization(new Reference("Organization/" + FACILITY_ID));
 
-            assertThat(facilityIdExtractor.extract(episodeOfCare)).isEqualTo(FACILITY_ID);
+            assertThat(facilityIdExtractor.extract(episodeOfCare)).isEqualTo(new FacilityDetails(FACILITY_ID, null));
         }
 
         @Test
         @DisplayName("an unpopulated EpisodeOfCare.managingOrganization resolves to null")
         void unpopulatedManagingOrganizationResolvesToNull() {
             assertThat(facilityIdExtractor.extract(new EpisodeOfCare())).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("ServiceRequest.performer resolution — and the Organization-prefix gate it needs")
+    class ServiceRequestPerformerResolution {
+
+        @Test
+        @DisplayName("ServiceRequest.performer[0] resolves when it is an Organization/ reference, with the prefix stripped")
+        void extractsFromServiceRequestPerformerOrganizationReference() {
+            ServiceRequest serviceRequest = new ServiceRequest();
+            serviceRequest.setPerformer(List.of(new Reference("Organization/" + FACILITY_ID)));
+
+            assertThat(facilityIdExtractor.extract(serviceRequest)).isEqualTo(new FacilityDetails(FACILITY_ID, null));
+        }
+
+        @Test
+        @DisplayName("an unpopulated ServiceRequest.performer resolves to null")
+        void unpopulatedPerformerResolvesToNull() {
+            assertThat(facilityIdExtractor.extract(new ServiceRequest())).isNull();
+        }
+
+        @Test
+        @DisplayName("performer[0] being a Practitioner/ reference resolves to null, never mistaken for a facility — "
+                + "this is the exact real shape of Observation.performer in production, which must NOT resolve")
+        void performerPractitionerReferenceResolvesToNullNotTheStrippedPractitionerId() {
+            ServiceRequest serviceRequest = new ServiceRequest();
+            serviceRequest.setPerformer(List.of(new Reference("Practitioner/KE-SHRPR-89552680-F575-4FD1-80F9")));
+
+            assertThat(facilityIdExtractor.extract(serviceRequest)).isNull();
+        }
+
+        @Test
+        @DisplayName("the same Practitioner/ performer shape on a real Observation — the resource type this gate actually "
+                + "protects — also resolves to null, not the practitioner's own id")
+        void observationPerformerPractitionerReferenceResolvesToNull() {
+            Observation observation = new Observation();
+            observation.setPerformer(List.of(new Reference("Practitioner/PUID-0000195-9")));
+
+            assertThat(facilityIdExtractor.extract(observation)).isNull();
+        }
+
+        @Test
+        @DisplayName("an Organization/ performer entry ahead of a Practitioner/ one wins — the first ORGANIZATION reference, "
+                + "not merely the first populated entry")
+        void firstOrganizationPerformerEntryWinsOverAnEarlierNonOrganizationOne() {
+            ServiceRequest serviceRequest = new ServiceRequest();
+            serviceRequest.setPerformer(List.of(
+                    new Reference("Practitioner/KE-SHRPR-89552680-F575-4FD1-80F9"),
+                    new Reference("Organization/" + FACILITY_ID)));
+
+            assertThat(facilityIdExtractor.extract(serviceRequest)).isEqualTo(new FacilityDetails(FACILITY_ID, null));
+        }
+    }
+
+    @Nested
+    @DisplayName("facility display name resolution")
+    class FacilityNameResolution {
+
+        @Test
+        @DisplayName("the display field on the same organization reference becomes facilityName")
+        void displayFieldBecomesFacilityName() {
+            Consent consent = new Consent();
+            Reference organizationWithDisplay = new Reference("Organization/" + FACILITY_ID);
+            organizationWithDisplay.setDisplay("Kamiriithu Health Centre");
+            consent.setOrganization(List.of(organizationWithDisplay));
+
+            assertThat(facilityIdExtractor.extract(consent))
+                    .isEqualTo(new FacilityDetails(FACILITY_ID, "Kamiriithu Health Centre"));
+        }
+
+        @Test
+        @DisplayName("no display field resolves to a null facilityName, not an extraction failure")
+        void noDisplayFieldResolvesToNullFacilityName() {
+            Consent consent = new Consent();
+            consent.setOrganization(List.of(new Reference("Organization/" + FACILITY_ID)));
+
+            assertThat(facilityIdExtractor.extract(consent))
+                    .isEqualTo(new FacilityDetails(FACILITY_ID, null));
+        }
+
+        @Test
+        @DisplayName("the display carried by the first POPULATED list entry wins, not the display of a skipped empty entry")
+        void displayFromTheWinningListEntryIsUsed() {
+            Consent consent = new Consent();
+            Reference emptyEntry = new Reference();
+            emptyEntry.setDisplay("should not be used");
+            Reference winningEntry = new Reference("Organization/" + FACILITY_ID);
+            winningEntry.setDisplay("Kamiriithu Health Centre");
+            consent.setOrganization(List.of(emptyEntry, winningEntry));
+
+            assertThat(facilityIdExtractor.extract(consent))
+                    .isEqualTo(new FacilityDetails(FACILITY_ID, "Kamiriithu Health Centre"));
+        }
+
+        @Test
+        @DisplayName("a display field with no resolvable ID at all is discarded, never surfaced on its own")
+        void displayWithNoResolvableIdIsDiscarded() {
+            Consent consent = new Consent();
+            Reference displayOnly = new Reference();
+            displayOnly.setDisplay("Kamiriithu Health Centre");
+            consent.setOrganization(List.of(displayOnly));
+
+            assertThat(facilityIdExtractor.extract(consent)).isNull();
         }
     }
 
@@ -169,7 +287,7 @@ class FacilityIdExtractorTest {
             Consent consent = new Consent();
             consent.setOrganization(List.of(new Reference("0030")));
 
-            assertThat(facilityIdExtractor.extract(consent)).isEqualTo("0030");
+            assertThat(facilityIdExtractor.extract(consent)).isEqualTo(new FacilityDetails("0030", null));
         }
 
         @Test
@@ -180,7 +298,7 @@ class FacilityIdExtractorTest {
             organizationByIdentifier.getIdentifier().setValue(FACILITY_ID);
             consent.setOrganization(List.of(organizationByIdentifier));
 
-            assertThat(facilityIdExtractor.extract(consent)).isEqualTo(FACILITY_ID);
+            assertThat(facilityIdExtractor.extract(consent)).isEqualTo(new FacilityDetails(FACILITY_ID, null));
         }
 
         @Test
@@ -191,7 +309,7 @@ class FacilityIdExtractorTest {
             organizationWithBlankReferenceAndAnIdentifier.getIdentifier().setValue(FACILITY_ID);
             consent.setOrganization(List.of(organizationWithBlankReferenceAndAnIdentifier));
 
-            assertThat(facilityIdExtractor.extract(consent)).isEqualTo(FACILITY_ID);
+            assertThat(facilityIdExtractor.extract(consent)).isEqualTo(new FacilityDetails(FACILITY_ID, null));
         }
     }
 
@@ -251,15 +369,17 @@ class FacilityIdExtractorTest {
          * {@code performer}, {@code policyRule}, {@code provision}, ...) and by the
          * {@code performer} entry that references a {@code Patient}, not an
          * {@code Organization} — a different field this extractor must not confuse
-         * with {@code organization}.
+         * with {@code organization}. This fixture's {@code organization[0]} also
+         * carries a real {@code display}, so this doubles as the facility name
+         * regression against real-world data.
          */
         @Test
-        @DisplayName("the real Consent resource, parsed by FhirResourceParser, still extracts the correct facility ID")
+        @DisplayName("the real Consent resource, parsed by FhirResourceParser, still extracts the correct facility ID and name")
         void extractsFromTheRealParsedConsentResource() {
             IBaseResource parsedConsent = fhirResourceParser.parse(loadFixture("consent.json"));
 
-            assertThat(facilityIdExtractor.extract(parsedConsent))
-                    .isEqualTo("KE-SHRF-D601602F-C9AC-4CC5-9347");
+            assertThat(facilityIdExtractor.extract(parsedConsent)).isEqualTo(new FacilityDetails(
+                    "KE-SHRF-D601602F-C9AC-4CC5-9347", "KAMIRITHU ST. CHARLES LWANGA CATHOLIC HEALTH CENTRE"));
         }
 
         /**
@@ -269,15 +389,16 @@ class FacilityIdExtractorTest {
          * against real-world noise: a {@code participant.individual} reference
          * to a {@code Practitioner}, and an {@code episodeOfCare} reference to
          * an {@code EpisodeOfCare}, neither of which this extractor must confuse
-         * with {@code serviceProvider}.
+         * with {@code serviceProvider}. This fixture's {@code serviceProvider}
+         * also carries a real {@code display}.
          */
         @Test
-        @DisplayName("the real Encounter resource, parsed by FhirResourceParser, still extracts the correct facility ID")
+        @DisplayName("the real Encounter resource, parsed by FhirResourceParser, still extracts the correct facility ID and name")
         void extractsFromTheRealParsedEncounterResource() {
             IBaseResource parsedEncounter = fhirResourceParser.parse(loadFixture("encounter.json"));
 
-            assertThat(facilityIdExtractor.extract(parsedEncounter))
-                    .isEqualTo("KE-SHRF-F75DBB8A-E36C-44DE-95F4");
+            assertThat(facilityIdExtractor.extract(parsedEncounter)).isEqualTo(new FacilityDetails(
+                    "KE-SHRF-F75DBB8A-E36C-44DE-95F4", "MBAGATHI COUNTY REFERRAL HOSPITAL"));
         }
 
         /**
@@ -287,15 +408,39 @@ class FacilityIdExtractorTest {
          * managingOrganization} extraction against real-world noise: a {@code
          * patient} reference and a {@code careManager} reference to a {@code
          * Practitioner}, neither of which this extractor must confuse with
-         * {@code managingOrganization}.
+         * {@code managingOrganization}. This fixture's {@code managingOrganization}
+         * carries no {@code display} at all — a real, expected "ID known, name
+         * unknown" case, not a fixture gap.
          */
         @Test
-        @DisplayName("the real EpisodeOfCare resource, parsed by FhirResourceParser, still extracts the correct facility ID")
+        @DisplayName("the real EpisodeOfCare resource, parsed by FhirResourceParser, extracts the facility ID with a null name (no display in this real payload)")
         void extractsFromTheRealParsedEpisodeOfCareResource() {
             IBaseResource parsedEpisodeOfCare = fhirResourceParser.parse(loadFixture("episode-of-care.json"));
 
             assertThat(facilityIdExtractor.extract(parsedEpisodeOfCare))
-                    .isEqualTo("KE-SHRF-86BD8E14-140B-4A55-8F6C");
+                    .isEqualTo(new FacilityDetails("KE-SHRF-86BD8E14-140B-4A55-8F6C", null));
+        }
+
+        /**
+         * The {@code ServiceRequest} resource from a real tibERbu emergency
+         * evacuation referral, byte-for-byte — proving {@code performer}
+         * extraction against real-world noise: a {@code requester} reference
+         * to a {@code Practitioner}, and two extensions ({@code
+         * evacuation-origin} pointing at a {@code Location}, {@code
+         * em-evacuation-destination} pointing at a DIFFERENT {@code
+         * Organization} entirely) that this extractor must not read from —
+         * only {@code performer} is consulted, not extensions. This
+         * fixture's {@code performer[0]} carries no {@code display} — a
+         * real "ID known, name unknown" case, same as the EpisodeOfCare
+         * fixture above.
+         */
+        @Test
+        @DisplayName("the real ServiceRequest resource, parsed by FhirResourceParser, extracts the facility ID from performer, with a null name")
+        void extractsFromTheRealParsedServiceRequestResource() {
+            IBaseResource parsedServiceRequest = fhirResourceParser.parse(loadFixture("service-request.json"));
+
+            assertThat(facilityIdExtractor.extract(parsedServiceRequest))
+                    .isEqualTo(new FacilityDetails("KE-SHRF-4E89A130-D458-4D7A-9C6D", null));
         }
 
         /** Reads {@code src/test/resources/fhir/<fileName>} from the classpath — the fixture files themselves are shared with {@code PatientIdExtractorTest}, though each test class loads them independently. */
