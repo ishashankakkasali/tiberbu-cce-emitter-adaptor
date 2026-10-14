@@ -82,8 +82,6 @@ For the full list of inbound headers, see [API Reference — §2.1 POST /inbound
 | `eventTime` | OffsetDateTime | `Instant.now(ZoneOffset.UTC)` | When the adaptor received the event |
 | `sourcePath` | String | Request URI path | e.g., `/inbound` |
 
-There is no `sourceEventId` field: tibERbu sends no per-event header. The CloudEvents `id` comes from the entry's resource content instead (`EventIdGenerator`).
-
 ## 3. Configuration Properties
 
 ### 3.1 Collector Properties
