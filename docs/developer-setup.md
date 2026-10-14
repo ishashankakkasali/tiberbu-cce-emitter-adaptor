@@ -561,7 +561,7 @@ properties, including a short retry backoff, directly).
 
 | Test Class | Description |
 |------------|-------------|
-| `FullPipelineIntegrationTest` | End-to-end, one shared context: happy path (single + multi-entry bundles, exact deterministic event-id assertions), mixed outcome (one forwarded + one failed sibling), all five ignored-payload scenarios, the facility-filter skip path, and every failure path (Collector 400/500-exhausted/duplicate, unparseable FHIR, missing patient reference, `GET /inbound`) |
+| `FullPipelineIntegrationTest` | End-to-end, one shared context: happy path (single + multi-entry bundles, exact content-based event-id assertions), mixed outcome (one forwarded + one failed sibling), all five ignored-payload scenarios, the facility-filter skip path, and every failure path (Collector 400/500-exhausted/duplicate, unparseable FHIR, missing patient reference, `GET /inbound`) |
 | `CollectorAuthModePipelineIntegrationTest` | The three outbound Collector auth modes (static token, none configured, OAuth2 with token caching) — each nested class gets its own Spring context, since each needs a different `cce.collector.auth.*` binding |
 | `ActuatorMetricsIntegrationTest` | All custom Micrometer counters appear at `/actuator/prometheus` with correct tags after a mixed-outcome request, and MDC fields reach an actual log line (uses `TestRestTemplate`, not MockMvc) |
 

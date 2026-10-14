@@ -41,8 +41,6 @@ public class CloudEventEnvelopeBuilder {
      */
     private static final String DATA_CONTENT_TYPE = "application/fhir+json";
 
-    private static final String RESOURCE_ID_FIELD = "id";
-
     private final EventIdGenerator eventIdGenerator;
     private final ObjectMapper objectMapper;
 
@@ -55,11 +53,10 @@ public class CloudEventEnvelopeBuilder {
      * Builds the CloudEvents envelope for one bundle entry.
      *
      * <p>Step 1: parse {@code fhirJson} into the {@code data} field's {@link
-     * JsonNode}. Step 2: read the resource's own top-level {@code "id"} from
-     * that same parsed node — no second parse — for {@link EventIdGenerator}'s
-     * per-entry differentiator. Step 3: generate the deterministic (or, absent
-     * a {@code traceId}, random) event {@code id}. Step 4: assemble every
-     * other field from {@code sourceMetadata} and the method's own parameters.
+     * JsonNode}. Step 2: derive the event {@code id} from that same parsed
+     * node's content — no second parse — with {@link EventIdGenerator}.
+     * Step 3: assemble every other field from {@code sourceMetadata} and the
+     * method's own parameters.
      *
      * @param fhirJson       the entry's FHIR resource, as JSON text (from {@code
      *                       BundleEntry#resourceJson})
@@ -75,8 +72,7 @@ public class CloudEventEnvelopeBuilder {
      */
     public CloudEventDto build(String fhirJson, String patientId, String resourceType, SourceMetadata sourceMetadata) {
         JsonNode data = parseToJsonNode(fhirJson);
-        String entryResourceId = data.path(RESOURCE_ID_FIELD).asText(null);
-        String eventId = eventIdGenerator.generate(sourceMetadata, entryResourceId);
+        String eventId = eventIdGenerator.generate(data);
         String eventTime = sourceMetadata.eventTime().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
 
         CloudEventDto cloudEvent = new CloudEventDto(

@@ -9,7 +9,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 | Field | Type | Required | Source | Description |
 |-------|------|----------|--------|-------------|
 | `specversion` | string | **Yes** — always `"1.0"` | Static | CloudEvents specification version |
-| `id` | string (UUID) | **Yes** | Generated | Unique event identifier (`UUID.randomUUID()` or deterministic hash) |
+| `id` | string (UUID) | **Yes** | Generated | UUID v5 of the SHA-256 of the entry's whole FHIR resource (canonical JSON, keys sorted). An unchanged resource sent again gets the same `id`, so the Collector reports it as `duplicate` |
 | `source` | string (URI) | **Yes** | Adaptor | Source system identifier (e.g. `"tiberbu"`) |
 | `type` | string | **Yes** | From FHIR resource | FHIR `resourceType` value as-is (e.g., `"Consent"`, `"Observation"`, `"Encounter"`) |
 | `subject` | string | Recommended | Extracted from FHIR | Patient identifier, from the entry resource's own `subject.reference` or `patient.reference` (prefix stripped). A `Patient` resource never reaches this extraction, since the bundle contract skips it before extraction runs. Used as Kafka partition key. |
@@ -19,7 +19,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 | `facilityid` | string | Optional | FHIR resource | Facility ID, via `FacilityIdExtractor`: the resource's organization-equivalent reference — `Consent.organization` (`getOrganization()`), `Encounter.serviceProvider` (`getServiceProvider()`), `EpisodeOfCare.managingOrganization` (`getManagingOrganization()`), or `ServiceRequest.performer` (`getPerformer()`) — based on a real survey of tibERbu production payloads. `performer` is a union reference (Practitioner\|Organization\|...), also declared by `Observation` with real `Practitioner/` values — a reference is only ever accepted here when its `ResourceType/` prefix is literally `Organization` (a bare id with no prefix at all is still accepted as-is). A `ResourceType/` prefix is stripped (`Organization/1302` → `1302`). `null` when the resource has none of these references (e.g. it has no such field at all, the field is unpopulated, or every candidate reference is prefixed with some resource type other than `Organization`). |
 | `facilityname` | string | Optional | FHIR resource | Facility display name, via `FacilityIdExtractor`, read from the same organization-equivalent reference's `display` field as `facilityid` — one resolution pass covers both (mirrors `FacilityService.upsertFacility()` in cce-compliance-service, which extracts the same two values the same way). `null` whenever `facilityid` is, and also when the reference carries no `display` — a known facility ID with an unknown name is a normal outcome, not an extraction failure. |
 | `sourceeventid` | string | Optional | *(not populated)* | Not populated |
-| `correlationid` | string | Recommended | Adaptor-generated | Adaptor-generated UUID |
+| `correlationid` | string | Recommended | `meta.traceId` | The inbound envelope's `meta.traceId`; a generated UUID when it is absent, blank or over 100 characters. The same for every entry of one bundle |
 | `protocolinstanceid` | string | Optional | Usually null | Protocol instance — emitter normally does not set this |
 | `protocoldefinitionid` | string | Optional | Usually null | Protocol definition — emitter normally does not set this |
 | `actionid` | string | Optional | Usually null | Action — emitter normally does not set this |
@@ -44,7 +44,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
   "datacontenttype": "application/fhir+json",
   "facilityid": "FAC-0001",
   "facilityname": "Kamiriithu Health Centre",
-  "correlationid": "7f3c9b12-4d5e-4a6b-8c7d-9e0f1a2b3c4d",
+  "correlationid": "ef1cb56375",
   "data": {
     "resourceType": "Consent",
     "id": "VCR-20260901-57098420",
@@ -78,11 +78,11 @@ For the full list of inbound headers, see [API Reference — §2.1 POST /inbound
 |-------|------|--------|-------------|
 | `sourceIdentifier` | String | The configured `cce.emitter.source` | e.g., `"tiberbu"` |
 | `facilityId` | String | `FacilityIdExtractor` — the resource's `organization` reference (see §3.3) | Nullable — null when there is no `organization` reference to resolve |
-| `correlationId` | String | Adaptor-generated | For downstream tracing. Never null. |
+| `correlationId` | String | The inbound envelope's `meta.traceId`; a generated UUID when it is absent, blank or over 100 characters | Links a CCE event to the tibERbu submission it came from. Never null. |
 | `eventTime` | OffsetDateTime | `Instant.now(ZoneOffset.UTC)` | When the adaptor received the event |
 | `sourcePath` | String | Request URI path | e.g., `/inbound` |
-| `traceId` | String | The inbound envelope's `meta.traceId` | Nullable. The primary input to `EventIdGenerator`'s deterministic CloudEvents `id` — a null/blank value makes the id random instead of deterministic for that event. There is no `sourceEventId` field: tibERbu sends no per-event header. |
-| `bundleEntryIndex` | int | Bundle iteration context | This entry's position in `resource.entry[]`. Used by `EventIdGenerator` as the per-entry id differentiator only when the entry's own `resource.id` is absent. |
+
+There is no `sourceEventId` field: tibERbu sends no per-event header. The CloudEvents `id` comes from the entry's resource content instead (`EventIdGenerator`).
 
 ## 3. Configuration Properties
 
@@ -317,7 +317,7 @@ Registered in `InboundEventService` and `CollectorForwardingService` via constru
 
 | MDC Key | Source | Description |
 |---------|--------|-------------|
-| `correlationId` | Adaptor-generated | Trace correlation ID |
+| `correlationId` | `meta.traceId`, or a generated UUID | Trace correlation ID |
 | `source` | Resolved source key | Source system identifier (e.g., `"tiberbu"`) |
 | `eventType` | FHIR `resourceType` | CloudEvents `type` field |
 | `subject` | Patient identifier | Identifies the patient for the event |

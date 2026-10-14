@@ -36,10 +36,13 @@ class CloudEventEnvelopeBuilderTest {
     private final CloudEventEnvelopeBuilder cloudEventEnvelopeBuilder =
             new CloudEventEnvelopeBuilder(new EventIdGenerator(), new ObjectMapper());
 
-    private SourceMetadata sourceMetadata(String traceId, int bundleEntryIndex) {
+    private SourceMetadata sourceMetadata() {
+        return sourceMetadata("7f3c9b12-4d5e-4a6b-8c7d-9e0f1a2b3c4d");
+    }
+
+    private SourceMetadata sourceMetadata(String correlationId) {
         return new SourceMetadata("tiberbu", "FAC-0001", "Kamiriithu Health Centre",
-                "7f3c9b12-4d5e-4a6b-8c7d-9e0f1a2b3c4d",
-                FIXED_EVENT_TIME, "/inbound", traceId, bundleEntryIndex);
+                correlationId, FIXED_EVENT_TIME, "/inbound");
     }
 
     @Nested
@@ -51,7 +54,7 @@ class CloudEventEnvelopeBuilderTest {
         void everyAttributeIsMappedFromItsDocumentedSource() {
             CloudEventDto cloudEvent = cloudEventEnvelopeBuilder.build(
                     CONSENT_JSON, "KE-SHRP-170CDF0A-1363-4972-B36A", "Consent",
-                    sourceMetadata("ef1cb56375", 1));
+                    sourceMetadata());
 
             assertThat(cloudEvent.specversion()).isEqualTo("1.0");
             assertThat(cloudEvent.source()).isEqualTo("tiberbu");
@@ -71,7 +74,7 @@ class CloudEventEnvelopeBuilderTest {
         void dataHoldsTheEntryResourceVerbatim() throws Exception {
             CloudEventDto cloudEvent = cloudEventEnvelopeBuilder.build(
                     CONSENT_JSON, "KE-SHRP-170CDF0A-1363-4972-B36A", "Consent",
-                    sourceMetadata("ef1cb56375", 1));
+                    sourceMetadata());
 
             JSONAssert.assertEquals(CONSENT_JSON, cloudEvent.data().toString(), JSONCompareMode.STRICT);
         }
@@ -82,7 +85,7 @@ class CloudEventEnvelopeBuilderTest {
             CloudEventDto observationEvent = cloudEventEnvelopeBuilder.build(
                     """
                     {"resourceType": "Observation", "id": "obs-001", "status": "final"}""",
-                    "KE-SHRP-170CDF0A-1363-4972-B36A", "Observation", sourceMetadata("ef1cb56375", 2));
+                    "KE-SHRP-170CDF0A-1363-4972-B36A", "Observation", sourceMetadata());
 
             assertThat(observationEvent.type()).isEqualTo("Observation");
         }
@@ -92,7 +95,7 @@ class CloudEventEnvelopeBuilderTest {
         void sourceNeverComesFromThePayload() {
             CloudEventDto cloudEvent = cloudEventEnvelopeBuilder.build(
                     CONSENT_JSON, "KE-SHRP-170CDF0A-1363-4972-B36A", "Consent",
-                    sourceMetadata("ef1cb56375", 1));
+                    sourceMetadata());
 
             // CONSENT_JSON carries no "source" field at all — this asserts the value is
             // exactly the configured source identifier, not merely "not absent".
@@ -109,7 +112,7 @@ class CloudEventEnvelopeBuilderTest {
         void sourceEventIdIsAbsentFromSerializedJson() throws Exception {
             CloudEventDto cloudEvent = cloudEventEnvelopeBuilder.build(
                     CONSENT_JSON, "KE-SHRP-170CDF0A-1363-4972-B36A", "Consent",
-                    sourceMetadata("ef1cb56375", 1));
+                    sourceMetadata());
 
             String serialized = new ObjectMapper().writeValueAsString(cloudEvent);
 
@@ -121,7 +124,7 @@ class CloudEventEnvelopeBuilderTest {
         void facilityNameIsAbsentFromSerializedJsonWhenNull() throws Exception {
             SourceMetadata metadataWithNoFacilityName = new SourceMetadata(
                     "tiberbu", "FAC-0001", null, "7f3c9b12-4d5e-4a6b-8c7d-9e0f1a2b3c4d",
-                    FIXED_EVENT_TIME, "/inbound", "ef1cb56375", 1);
+                    FIXED_EVENT_TIME, "/inbound");
             CloudEventDto cloudEvent = cloudEventEnvelopeBuilder.build(
                     CONSENT_JSON, "KE-SHRP-170CDF0A-1363-4972-B36A", "Consent", metadataWithNoFacilityName);
 
@@ -135,7 +138,7 @@ class CloudEventEnvelopeBuilderTest {
         void extensionAttributeNamesAreLowercase() throws Exception {
             CloudEventDto cloudEvent = cloudEventEnvelopeBuilder.build(
                     CONSENT_JSON, "KE-SHRP-170CDF0A-1363-4972-B36A", "Consent",
-                    sourceMetadata("ef1cb56375", 1));
+                    sourceMetadata());
 
             String serialized = new ObjectMapper().writeValueAsString(cloudEvent);
 
@@ -149,16 +152,16 @@ class CloudEventEnvelopeBuilderTest {
     class EventIdRegression {
 
         @Test
-        @DisplayName("the same source event replayed twice gets the same id")
-        void sameSourceEventReplayedTwiceGetsSameId() {
-            SourceMetadata metadata = sourceMetadata("ef1cb56375", 1);
-
+        @DisplayName("the same resource re-sent in a new bundle (new correlation id) gets the same id")
+        void sameResourceResentInANewBundleGetsSameId() {
             CloudEventDto firstDelivery = cloudEventEnvelopeBuilder.build(
-                    CONSENT_JSON, "KE-SHRP-170CDF0A-1363-4972-B36A", "Consent", metadata);
-            CloudEventDto replayedDelivery = cloudEventEnvelopeBuilder.build(
-                    CONSENT_JSON, "KE-SHRP-170CDF0A-1363-4972-B36A", "Consent", metadata);
+                    CONSENT_JSON, "KE-SHRP-170CDF0A-1363-4972-B36A", "Consent",
+                    sourceMetadata("7f3c9b12-4d5e-4a6b-8c7d-9e0f1a2b3c4d"));
+            CloudEventDto resentDelivery = cloudEventEnvelopeBuilder.build(
+                    CONSENT_JSON, "KE-SHRP-170CDF0A-1363-4972-B36A", "Consent",
+                    sourceMetadata("0b1e2d3c-5f6a-4b7c-8d9e-a0b1c2d3e4f5"));
 
-            assertThat(firstDelivery.id()).isEqualTo(replayedDelivery.id());
+            assertThat(resentDelivery.id()).isEqualTo(firstDelivery.id());
         }
 
         @Test
@@ -166,14 +169,12 @@ class CloudEventEnvelopeBuilderTest {
         void twoEntriesInOneBundleNeverShareAnId() {
             String observationJson = """
                     {"resourceType": "Observation", "id": "obs-001", "status": "final"}""";
-            String sharedTraceId = "ef1cb56375";
-
             CloudEventDto consentEvent = cloudEventEnvelopeBuilder.build(
                     CONSENT_JSON, "KE-SHRP-170CDF0A-1363-4972-B36A", "Consent",
-                    sourceMetadata(sharedTraceId, 1));
+                    sourceMetadata());
             CloudEventDto observationEvent = cloudEventEnvelopeBuilder.build(
                     observationJson, "KE-SHRP-170CDF0A-1363-4972-B36A", "Observation",
-                    sourceMetadata(sharedTraceId, 2));
+                    sourceMetadata());
 
             assertThat(consentEvent.id()).isNotEqualTo(observationEvent.id());
         }
@@ -189,7 +190,7 @@ class CloudEventEnvelopeBuilderTest {
             assertThatExceptionOfType(FhirMappingException.class)
                     .isThrownBy(() -> cloudEventEnvelopeBuilder.build(
                             "not valid json", "KE-SHRP-170CDF0A-1363-4972-B36A", "Consent",
-                            sourceMetadata("ef1cb56375", 1)));
+                            sourceMetadata()));
         }
     }
 }

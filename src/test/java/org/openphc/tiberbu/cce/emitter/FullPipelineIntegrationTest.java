@@ -12,7 +12,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.openphc.tiberbu.cce.emitter.cloudevents.EventIdGenerator;
-import org.openphc.tiberbu.cce.emitter.model.SourceMetadata;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -161,9 +160,15 @@ class FullPipelineIntegrationTest {
         throw new AssertionError("No Collector request found carrying data.id=" + resourceId);
     }
 
-    private static String deterministicEventId(String traceId, String entryResourceId) {
-        SourceMetadata metadata = new SourceMetadata(null, null, null, null, null, null, traceId, 0);
-        return EVENT_ID_GENERATOR.generate(metadata, entryResourceId);
+    /** The event id the adaptor must derive for the fixture's entry whose resource has this id. */
+    private static String expectedEventId(String fixtureName, String resourceId) {
+        for (JsonNode bundleEntry : json(loadFixture(fixtureName)).path("resource").path("entry")) {
+            JsonNode resource = bundleEntry.path("resource");
+            if (resourceId.equals(resource.path("id").asText(null))) {
+                return EVENT_ID_GENERATOR.generate(resource);
+            }
+        }
+        throw new AssertionError("No entry with resource.id=" + resourceId + " in fixture " + fixtureName);
     }
 
     @Nested
@@ -187,7 +192,7 @@ class FullPipelineIntegrationTest {
             assertThat(event.path("outcome").asText()).isEqualTo("forwarded");
             assertThat(event.path("collectorStatus").asText()).isEqualTo("accepted");
 
-            String expectedEventId = deterministicEventId("ef1cb56375", "VCR-20260901-57098420");
+            String expectedEventId = expectedEventId("consent-bundle.json", "VCR-20260901-57098420");
             assertThat(event.path("eventId").asText()).isEqualTo(expectedEventId);
 
             collectorMock.verify(1, postRequestedFor(urlEqualTo("/v1/events"))
@@ -203,25 +208,17 @@ class FullPipelineIntegrationTest {
             assertThat(cloudEvent.path("facilityname").asText()).isEqualTo("Kamiriithu Health Centre");
             assertThat(cloudEvent.path("datacontenttype").asText()).isEqualTo("application/fhir+json");
             assertThat(cloudEvent.has("sourceeventid")).as("sourceeventid is omitted, never null").isFalse();
-            assertThat(cloudEvent.path("correlationid").asText())
-                    .matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+            assertThat(cloudEvent.path("correlationid").asText()).isEqualTo("ef1cb56375");
             assertThat(cloudEvent.path("data").path("resourceType").asText()).isEqualTo("Consent");
         }
 
         @Test
-        @DisplayName("correlationid is a fresh generated UUID on every request, even with no inbound headers at all")
-        void correlationidIsAlwaysAFreshGeneratedUuid() {
-            String fixture = loadFixture("consent-bundle.json");
+        @DisplayName("every entry of a bundle carries the envelope's meta.traceId as its correlationid")
+        void correlationidIsTheEnvelopeTraceId() {
+            postInbound(loadFixture("multi-entry-bundle.json"));
 
-            postInbound(fixture);
-            JsonNode firstCall = collectorRequestBodyFor("VCR-20260901-57098420");
-            postInbound(fixture);
-            JsonNode secondCall = collectorRequestBodyFor("VCR-20260901-57098420");
-
-            // Same traceId + resource.id both times -> the deterministic event id is identical,
-            // but correlationid is minted fresh per request and must differ.
-            assertThat(secondCall.path("id").asText()).isEqualTo(firstCall.path("id").asText());
-            assertThat(secondCall.path("correlationid").asText()).isNotEqualTo(firstCall.path("correlationid").asText());
+            assertThat(collectorRequestBodyFor("VCR-MULTI-0001").path("correlationid").asText()).isEqualTo("trace-multi-0001");
+            assertThat(collectorRequestBodyFor("OBS-MULTI-0001").path("correlationid").asText()).isEqualTo("trace-multi-0001");
         }
 
         @Test
@@ -241,8 +238,8 @@ class FullPipelineIntegrationTest {
             assertThat(secondEvent.path("entryIndex").asInt()).isEqualTo(2);
             assertThat(secondEvent.path("type").asText()).isEqualTo("Observation");
 
-            String expectedConsentId = deterministicEventId("trace-multi-0001", "VCR-MULTI-0001");
-            String expectedObservationId = deterministicEventId("trace-multi-0001", "OBS-MULTI-0001");
+            String expectedConsentId = expectedEventId("multi-entry-bundle.json", "VCR-MULTI-0001");
+            String expectedObservationId = expectedEventId("multi-entry-bundle.json", "OBS-MULTI-0001");
             assertThat(firstEvent.path("eventId").asText()).isEqualTo(expectedConsentId);
             assertThat(secondEvent.path("eventId").asText()).isEqualTo(expectedObservationId);
             assertThat(expectedConsentId).isNotEqualTo(expectedObservationId);

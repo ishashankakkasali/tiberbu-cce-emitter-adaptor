@@ -1,6 +1,10 @@
 package org.openphc.tiberbu.cce.emitter.cloudevents;
 
-import org.openphc.tiberbu.cce.emitter.model.SourceMetadata;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.cfg.JsonNodeFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -8,47 +12,29 @@ import org.springframework.stereotype.Component;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.UUID;
 
 /**
- * Generates the CloudEvents {@code id} for one bundle entry — deterministic
- * whenever there's enough information to be confident about it.
+ * Generates the CloudEvents {@code id} for one bundle entry from the entry's
+ * FHIR resource content, so an identical resource sent again gets the same id
+ * and the Collector drops it as a duplicate ({@code cloudevents_id} +
+ * {@code source}).
  *
- * <p><b>Why not a header-derived key.</b> tibERbu sends no per-event header
- * (confirmed), so the id cannot be keyed on anything like {@code
- * X-Source-Event-Id}. Two payload-derived candidates were ruled out using real
- * tibERbu sample data: {@code meta.bundleId + entry.resource.id} and {@code
- * entry.request.url} both collided across two genuinely distinct real events
- * (same bundleId, resourceId, and request URL, ~26 minutes apart, from two
- * different consent-capture flows for the same person) — the Collector would
- * have silently dropped the second one as a duplicate. That is active data
- * loss, strictly worse than dedup simply not firing.
+ * <p><b>The key.</b> The whole resource, written as
+ * canonical JSON (object keys sorted at every level, no whitespace), hashed
+ * with SHA-256; the hex digest is the name of a UUID v5 (SHA-1, RFC 4122
+ * § 4.3, DNS namespace). Same content always produces the same id; any change
+ * to any field (status, verificationStatus, type, period, text, …)
+ * produces a new one. {@code resourceType} and {@code id} are part of the
+ * content, so two different resources never share an id.
  *
- * <p><b>The key actually used.</b> {@code meta.traceId} — the field that
- * genuinely differed between those two colliding samples — combined with the
- * entry's own {@code resource.id} as the per-entry differentiator (a bundle
- * has one {@code traceId} but N entries). {@link #generate} hashes {@code
- * traceId + ":" + resourceId} into a UUID v5 (SHA-1, RFC 4122 § 4.3, DNS
- * namespace): the same pair always produces the same id, so a genuine replay
- * is caught, while two requests with different {@code traceId}s never collide
- * even if everything else about them matches.
- *
- * <p><b>When {@code traceId} is absent or blank.</b> There is no confirmed
- * guarantee yet that tibERbu always sends one — its global uniqueness across
- * all tibERbu traffic is still unconfirmed with the integration owner.
- * Falling back to a payload-derived key without it (e.g. {@code bundleId +
- * resourceId} alone) would resurrect the exact collision already proven with
- * real data above. Instead this falls back to {@link UUID#randomUUID()}: the
- * one event loses dedup (a replay of it would get a different id and not be
- * caught), but no genuinely new event risks being silently dropped as a false
- * duplicate — the same "never guess into a collision" principle that ruled
- * out the two candidates above.
- *
- * <p><b>When {@code resource.id} is absent but {@code traceId} is present.</b>
- * The per-entry differentiator falls back to {@link
- * SourceMetadata#bundleEntryIndex()} instead — always available, and still
- * unique within one bundle — rather than giving up determinism entirely just
- * because one FHIR resource happened to omit its own {@code id}.
+ * <p><b>Why content, not the request.</b> tibERbu re-sends unchanged
+ * resources many times (double-sends, a nightly re-send, and a re-send loop
+ * every 10 minutes for some patients), each time in a new bundle with a new
+ * envelope {@code meta.traceId}. A key built from the request ({@code traceId},
+ * {@code bundleId}, or a header — tibERbu sends none) gives every copy a new
+ * id, so none is caught.
  */
 @Component
 public class EventIdGenerator {
@@ -64,54 +50,52 @@ public class EventIdGenerator {
     private static final UUID NAMESPACE_DNS = UUID.fromString("6ba7b810-9dad-11d1-80b4-00c04fd430c8");
 
     /**
-     * Generates the CloudEvents {@code id} for one bundle entry.
-     *
-     * <p>Example — {@code metadata.traceId()="ef1cb56375"}, {@code
-     * entryResourceId="VCR-20260901-57098420"}: hashes {@code
-     * "ef1cb56375:VCR-20260901-57098420"} into a UUID v5. Calling this again
-     * with the exact same two inputs (a genuine replay) returns the identical
-     * id; a different {@code traceId} (a genuinely new submission) or a
-     * different {@code entryResourceId} (a different entry in the same
-     * bundle) both produce a different id.
-     *
-     * @param metadata        this entry's source metadata; supplies {@code
-     *                        traceId} and, as a fallback, {@code
-     *                        bundleEntryIndex}
-     * @param entryResourceId the entry's own {@code resource.id}, or {@code
-     *                        null}/blank when the resource doesn't carry one
-     * @return a UUID string — deterministic when {@code traceId} is present,
-     *         random otherwise
+     * Writes a JSON tree with every object's keys sorted, so the same content
+     * gives the same bytes whatever key order the sender used. Array order is
+     * kept: in FHIR it is meaningful.
      */
-    public String generate(SourceMetadata metadata, String entryResourceId) {
-        String traceId = metadata.traceId();
-        if (traceId == null || traceId.isBlank()) {
-            String randomId = UUID.randomUUID().toString();
-            log.warn("No traceId available for source='{}' path='{}' — generated a random, "
-                            + "non-deterministic event id '{}'; a replay of this request will NOT be caught as a duplicate",
-                    metadata.sourceIdentifier(), metadata.sourcePath(), randomId);
-            return randomId;
-        }
-
-        String perEntryDifferentiator = (entryResourceId != null && !entryResourceId.isBlank())
-                ? entryResourceId
-                : String.valueOf(metadata.bundleEntryIndex());
-        if (entryResourceId == null || entryResourceId.isBlank()) {
-            log.debug("Entry has no resource.id — falling back to bundleEntryIndex={} as the per-entry differentiator",
-                    metadata.bundleEntryIndex());
-        }
-
-        String name = traceId + ":" + perEntryDifferentiator;
-        String deterministicId = generateUuidV5(name).toString();
-        log.debug("Generated deterministic event id '{}' from name '{}'", deterministicId, name);
-        return deterministicId;
-    }
+    private static final ObjectMapper CANONICAL_JSON_WRITER = JsonMapper.builder()
+            .enable(JsonNodeFeature.WRITE_PROPERTIES_SORTED)
+            .build();
 
     /**
-     * Generates a UUID v5 (SHA-1 name-based) from the given name string, under
-     * {@link #NAMESPACE_DNS}.
+     * Generates the CloudEvents {@code id} for one bundle entry.
+     *
+     * <p>Example — two identical copies of the same {@code Consent} ({@code
+     * status "proposed"}), sent in different bundles: both return the same id.
+     * The same {@code Consent} later sent with {@code status "active"} returns
+     * a different id.
+     *
+     * @param resource the entry's FHIR resource, as parsed for the CloudEvent's
+     *                 {@code data} field; not modified
+     * @return a UUID string, determined by the resource's content alone
      */
-    private UUID generateUuidV5(String name) {
-        return nameUuidFromNamespaceAndString(NAMESPACE_DNS, name);
+    public String generate(JsonNode resource) {
+        String contentSha256 = sha256Hex(canonicalJson(resource));
+        String eventId = nameUuidFromNamespaceAndString(NAMESPACE_DNS, contentSha256).toString();
+        log.debug("Generated event id '{}' from content sha256 '{}'", eventId, contentSha256);
+        return eventId;
+    }
+
+    /** The resource as canonical JSON; the resource itself is not modified. */
+    private static String canonicalJson(JsonNode resource) {
+        try {
+            return CANONICAL_JSON_WRITER.writeValueAsString(resource);
+        } catch (JsonProcessingException unwritableTree) {
+            // a tree that was just parsed from JSON can always be written back
+            throw new IllegalStateException("Could not write FHIR resource as canonical JSON", unwritableTree);
+        }
+    }
+
+    private static String sha256Hex(String canonicalJson) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(canonicalJson.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException impossibleOnAnyJvm) {
+            // SHA-256 is guaranteed present by the Java Cryptography Architecture spec.
+            throw new IllegalStateException("SHA-256 algorithm not available", impossibleOnAnyJvm);
+        }
     }
 
     /**
