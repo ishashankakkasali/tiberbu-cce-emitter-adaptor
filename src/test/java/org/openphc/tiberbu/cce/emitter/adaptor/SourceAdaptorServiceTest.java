@@ -6,6 +6,9 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.openphc.tiberbu.cce.emitter.cloudevents.CloudEventEnvelopeBuilder;
 import org.openphc.tiberbu.cce.emitter.cloudevents.EventIdGenerator;
 import org.openphc.tiberbu.cce.emitter.config.EmitterProperties;
@@ -20,6 +23,7 @@ import org.openphc.tiberbu.cce.emitter.model.InboundRequest;
 import org.openphc.tiberbu.cce.emitter.model.TransformationResult;
 
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -150,17 +154,57 @@ class SourceAdaptorServiceTest {
         }
 
         @Test
-        @DisplayName("meta.traceId feeds the deterministic event id — the same envelope, adapted twice, produces the same id")
-        void traceIdMakesTheEventIdDeterministic() {
+        @DisplayName("correlationid is the envelope's meta.traceId")
+        void correlationIdIsTheEnvelopeTraceId() {
             SourceAdaptorService sourceAdaptorService = sourceAdaptorServiceWithAllowlist();
-            String body = envelope("trace-001", PATIENT_ENTRY, consentEntry(ALLOWED_ORGANIZATION_ID));
 
-            String firstId = sourceAdaptorService.processBundleEntries(inboundRequestWithBody(body))
+            List<BundleEntryResult> bundleEntryResults = sourceAdaptorService.processBundleEntries(inboundRequestWithBody(
+                    envelope("trace-001", PATIENT_ENTRY, consentEntry(ALLOWED_ORGANIZATION_ID), OBSERVATION_ENTRY)));
+
+            assertThat(bundleEntryResults).extracting(result -> result.cloudEventToForward().correlationid())
+                    .containsOnly("trace-001");
+        }
+
+        @ParameterizedTest
+        @NullSource
+        @ValueSource(strings = {"", "   "})
+        @DisplayName("an absent or blank meta.traceId falls back to a generated UUID, shared by every entry")
+        void missingTraceIdFallsBackToAGeneratedUuid(String unusableTraceId) {
+            SourceAdaptorService sourceAdaptorService = sourceAdaptorServiceWithAllowlist();
+
+            List<BundleEntryResult> bundleEntryResults = sourceAdaptorService.processBundleEntries(inboundRequestWithBody(
+                    envelope(unusableTraceId, PATIENT_ENTRY, consentEntry(ALLOWED_ORGANIZATION_ID), OBSERVATION_ENTRY)));
+
+            String firstCorrelationId = bundleEntryResults.get(0).cloudEventToForward().correlationid();
+            assertThat(UUID.fromString(firstCorrelationId)).isNotNull();
+            assertThat(bundleEntryResults.get(1).cloudEventToForward().correlationid()).isEqualTo(firstCorrelationId);
+        }
+
+        @Test
+        @DisplayName("a meta.traceId longer than the Collector's 100-character column falls back to a generated UUID")
+        void overlongTraceIdFallsBackToAGeneratedUuid() {
+            SourceAdaptorService sourceAdaptorService = sourceAdaptorServiceWithAllowlist();
+
+            String correlationId = sourceAdaptorService.processBundleEntries(inboundRequestWithBody(
+                            envelope("t".repeat(101), PATIENT_ENTRY, consentEntry(ALLOWED_ORGANIZATION_ID))))
+                    .get(0).cloudEventToForward().correlationid();
+
+            assertThat(UUID.fromString(correlationId)).isNotNull();
+        }
+
+        @Test
+        @DisplayName("the same entry re-sent in a new bundle (new meta.traceId) gets the same event id")
+        void resentEntryUnderANewTraceIdGetsTheSameEventId() {
+            SourceAdaptorService sourceAdaptorService = sourceAdaptorServiceWithAllowlist();
+
+            String firstId = sourceAdaptorService.processBundleEntries(inboundRequestWithBody(
+                            envelope("trace-001", PATIENT_ENTRY, consentEntry(ALLOWED_ORGANIZATION_ID))))
                     .get(0).cloudEventToForward().id();
-            String secondId = sourceAdaptorService.processBundleEntries(inboundRequestWithBody(body))
+            String resentId = sourceAdaptorService.processBundleEntries(inboundRequestWithBody(
+                            envelope("trace-002", PATIENT_ENTRY, consentEntry(ALLOWED_ORGANIZATION_ID))))
                     .get(0).cloudEventToForward().id();
 
-            assertThat(firstId).isEqualTo(secondId);
+            assertThat(resentId).isEqualTo(firstId);
         }
 
         @Test

@@ -39,7 +39,7 @@ POST /inbound
 | `Content-Type` | Yes | `application/json` |
 
 > **Note:** Facility ID is resolved from the FHIR resource (`FacilityIdExtractor`). The CloudEvent
-> `correlationid` is adaptor-generated. The source is fixed by `cce.emitter.source`.
+> `correlationid` is the inbound envelope's `meta.traceId` (a generated UUID when it is absent, blank or over 100 characters), the same for every entry of one bundle. The source is fixed by `cce.emitter.source`.
 
 **Body:** TibERbu payloads always arrive as a wrapper object with two top-level keys — `meta` (transport envelope) and `resource` (the FHIR Bundle itself, `resourceType: "Bundle"`). Bundle entries live at `resource.entry[]`. Any entry whose `resourceType` is `Patient` is ignored for downstream event processing. Every other entry is treated as an independent event payload and forwarded individually after the adaptor resolves facility context and applies any configured filter rules.
 
@@ -190,7 +190,7 @@ curl -X POST http://localhost:8080/inbound \
   "datacontenttype": "application/fhir+json",
   "facilityid": "FAC-0001",
   "facilityname": "Kamiriithu Health Centre",
-  "correlationid": "7f3c9b12-4d5e-4a6b-8c7d-9e0f1a2b3c4d",
+  "correlationid": "ef1cb56375",
   "data": {
     "resourceType": "Consent",
     "id": "VCR-20260901-57098420",
@@ -213,7 +213,7 @@ How each attribute is derived:
 | `facilityid` | `FAC-0001` | Extracted from the FHIR resource (`FacilityIdExtractor`) |
 | `facilityname` | `Kamiriithu Health Centre` | The same organization reference's `display` field (`FacilityIdExtractor`); `null`/omitted whenever `facilityid` is, or when the reference carries no `display` |
 | `sourceeventid` | *(not populated)* | Not populated |
-| `correlationid` | `7f3c9b12-…` | Adaptor-generated |
+| `correlationid` | `ef1cb56375` | `meta.traceId` (generated UUID when unusable) |
 | `data` | the `Consent` resource | `entry[1].resource`, verbatim |
 
 **Adaptor response:** `202 Accepted`

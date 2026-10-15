@@ -1,180 +1,164 @@
 package org.openphc.tiberbu.cce.emitter.cloudevents;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-import org.openphc.tiberbu.cce.emitter.model.SourceMetadata;
 
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Covers the deterministic id contract: it must catch a genuine replay while
- * never colliding two genuinely distinct events. The two payload-derived
- * candidates ruled out by real tibERbu sample data are exercised directly as
- * regression tests (a real duplicate-payload pair, and two entries sharing one
- * bundle), alongside the traceId-absent and resource.id-absent fallbacks.
+ * Covers the content-based id contract: an unchanged resource sent again gets
+ * the same id (so the Collector drops it as a duplicate), while any change to
+ * the resource, {@code meta} included, gets a new one. The sender's key order
+ * never matters.
  */
 class EventIdGeneratorTest {
 
-    private static final String SOURCE = "tiberbu";
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final EventIdGenerator eventIdGenerator = new EventIdGenerator();
 
-    private SourceMetadata metadataWithTraceId(String traceId, int bundleEntryIndex) {
-        return new SourceMetadata(SOURCE, "FAC-0001", null, "corr-id", OffsetDateTime.now(ZoneOffset.UTC),
-                "/inbound", traceId, bundleEntryIndex);
+    private static JsonNode resource(String json) {
+        try {
+            return OBJECT_MAPPER.readTree(json);
+        } catch (Exception invalidTestJson) {
+            throw new IllegalArgumentException(invalidTestJson);
+        }
     }
 
+    private static final String PROPOSED_CONSENT = """
+            {"resourceType":"Consent","id":"VCR-20260901-57098420","status":"proposed",
+             "meta":{"profile":["https://nshr-uat.sha.go.ke/fhir/StructureDefinition/ke-consent"]},
+             "patient":{"reference":"Patient/KE-SHRP-170CDF0A-1363-4972-B36A"},
+             "verification":[{"verified":false}]}
+            """;
+
     @Nested
-    @DisplayName("deterministic path — traceId present")
-    class DeterministicPath {
+    @DisplayName("same content — same id")
+    class SameContent {
 
         @Test
-        @DisplayName("the same traceId + resource id, called twice, produce the same id — a genuine replay is caught")
-        void sameInputsProduceSameId() {
-            SourceMetadata metadata = metadataWithTraceId("ef1cb56375", 1);
+        @DisplayName("the same resource sent twice produces the same id — a re-send is caught as a duplicate")
+        void sameResourceSentTwiceProducesTheSameId() {
+            String firstCopy = eventIdGenerator.generate(resource(PROPOSED_CONSENT));
+            String secondCopy = eventIdGenerator.generate(resource(PROPOSED_CONSENT));
 
-            String firstCall = eventIdGenerator.generate(metadata, "VCR-20260901-57098420");
-            String secondCall = eventIdGenerator.generate(metadata, "VCR-20260901-57098420");
-
-            assertThat(firstCall).isEqualTo(secondCall);
+            assertThat(firstCopy).isEqualTo(secondCopy);
         }
 
         @Test
-        @DisplayName("REGRESSION: two real payloads that collide on bundleId+resourceId, but differ in traceId, get DIFFERENT ids")
-        void realDuplicatePayloadPairNoLongerCollides() {
-            // The two real tibERbu Consent samples that motivated this design: identical
-            // bundleId ("VCR-20260901-57098420") and identical Consent.id
-            // ("VCR-20260901-57098420") in both — genuinely distinct events (different
-            // consent-capture flows, ~26 minutes apart), differing only in traceId.
-            String sharedResourceId = "VCR-20260901-57098420";
-            SourceMetadata firstSubmission = metadataWithTraceId("ef1cb56375", 1);
-            SourceMetadata secondSubmission = metadataWithTraceId("8feb6c0fb2", 1);
+        @DisplayName("the sender's key order, at any depth, does not change the id")
+        void keyOrderDoesNotChangeTheId() {
+            String oneOrder = eventIdGenerator.generate(resource("""
+                    {"resourceType":"Observation","id":"fa86e0c582baf04e","status":"final",
+                     "valueQuantity":{"value":38.0,"unit":"Cel"}}
+                    """));
+            String otherOrder = eventIdGenerator.generate(resource("""
+                    {"valueQuantity":{"unit":"Cel","value":38.0},"status":"final",
+                     "id":"fa86e0c582baf04e","resourceType":"Observation"}
+                    """));
 
-            String firstEventId = eventIdGenerator.generate(firstSubmission, sharedResourceId);
-            String secondEventId = eventIdGenerator.generate(secondSubmission, sharedResourceId);
-
-            assertThat(firstEventId).isNotEqualTo(secondEventId);
+            assertThat(otherOrder).isEqualTo(oneOrder);
         }
 
         @Test
-        @DisplayName("REGRESSION: two entries in the SAME bundle (same traceId) get DIFFERENT ids")
-        void twoEntriesInOneBundleGetDifferentIds() {
-            SourceMetadata sameBundleMetadata = metadataWithTraceId("ef1cb56375", 1);
+        @DisplayName("generating the id leaves the resource unchanged — it is still the CloudEvent's data")
+        void generatingTheIdDoesNotModifyTheResource() {
+            JsonNode consent = resource(PROPOSED_CONSENT);
 
-            String consentEventId = eventIdGenerator.generate(sameBundleMetadata, "VCR-20260901-57098420");
-            String observationEventId = eventIdGenerator.generate(sameBundleMetadata, "obs-001");
+            eventIdGenerator.generate(consent);
 
-            assertThat(consentEventId).isNotEqualTo(observationEventId);
-        }
-
-        @Test
-        @DisplayName("a different traceId with everything else identical still produces a different id")
-        void differentTraceIdAloneChangesTheId() {
-            String eventId1 = eventIdGenerator.generate(metadataWithTraceId("trace-aaa", 1), "resource-001");
-            String eventId2 = eventIdGenerator.generate(metadataWithTraceId("trace-bbb", 1), "resource-001");
-
-            assertThat(eventId1).isNotEqualTo(eventId2);
-        }
-
-        @Test
-        @DisplayName("the generated id is a well-formed UUID string")
-        void generatedIdIsAWellFormedUuid() {
-            String eventId = eventIdGenerator.generate(metadataWithTraceId("ef1cb56375", 0), "resource-001");
-
-            assertThat(UUID.fromString(eventId)).isNotNull();
+            assertThat(consent).isEqualTo(resource(PROPOSED_CONSENT));
         }
     }
 
     @Nested
-    @DisplayName("resource.id absent, traceId present — falls back to bundleEntryIndex")
-    class ResourceIdAbsentFallback {
+    @DisplayName("changed content — new id")
+    class ChangedContent {
 
         @Test
-        @DisplayName("a null resource id falls back to bundleEntryIndex, still deterministic")
-        void nullResourceIdFallsBackToBundleEntryIndex() {
-            SourceMetadata metadata = metadataWithTraceId("ef1cb56375", 2);
+        @DisplayName("REGRESSION: the two real Consent samples (proposed, then verified) get DIFFERENT ids")
+        void proposedAndVerifiedConsentGetDifferentIds() {
+            // The two real tibERbu Consent samples that once collided on bundleId + resource.id:
+            // same Consent.id, ~26 minutes apart, the first proposed and unverified, the second
+            // active and verified. Their content differs, so their ids must too.
+            String proposed = eventIdGenerator.generate(resource(PROPOSED_CONSENT));
+            String verified = eventIdGenerator.generate(resource("""
+                    {"resourceType":"Consent","id":"VCR-20260901-57098420","status":"active",
+                     "meta":{"profile":["https://nshr-uat.sha.go.ke/fhir/StructureDefinition/ke-consent"]},
+                     "patient":{"reference":"Patient/KE-SHRP-170CDF0A-1363-4972-B36A"},
+                     "verification":[{"verified":true}]}
+                    """));
 
-            String firstCall = eventIdGenerator.generate(metadata, null);
-            String secondCall = eventIdGenerator.generate(metadata, null);
-
-            assertThat(firstCall).isEqualTo(secondCall);
-        }
-
-        @ParameterizedTest
-        @ValueSource(strings = {"", "   "})
-        @DisplayName("a blank resource id also falls back to bundleEntryIndex")
-        void blankResourceIdFallsBackToBundleEntryIndex(String blankResourceId) {
-            SourceMetadata metadata = metadataWithTraceId("ef1cb56375", 2);
-
-            String firstCall = eventIdGenerator.generate(metadata, blankResourceId);
-            String secondCall = eventIdGenerator.generate(metadata, blankResourceId);
-
-            assertThat(firstCall).isEqualTo(secondCall);
+            assertThat(verified).isNotEqualTo(proposed);
         }
 
         @Test
-        @DisplayName("two entries with no resource id, at different indices in the same bundle, still get different ids")
-        void differentBundleEntryIndicesProduceDifferentIdsWhenResourceIdIsAbsent() {
-            String traceId = "ef1cb56375";
+        @DisplayName("a change only in meta (a confidentiality label) produces a new id")
+        void metaChangeProducesANewId() {
+            String normal = eventIdGenerator.generate(resource("""
+                    {"resourceType":"Condition","id":"cfa51b6b2491c19e",
+                     "meta":{"security":[{"code":"N"}]}}
+                    """));
+            String restricted = eventIdGenerator.generate(resource("""
+                    {"resourceType":"Condition","id":"cfa51b6b2491c19e",
+                     "meta":{"security":[{"code":"R"}]}}
+                    """));
 
-            String firstEntryEventId = eventIdGenerator.generate(metadataWithTraceId(traceId, 0), null);
-            String secondEntryEventId = eventIdGenerator.generate(metadataWithTraceId(traceId, 1), null);
-
-            assertThat(firstEntryEventId).isNotEqualTo(secondEntryEventId);
+            assertThat(restricted).isNotEqualTo(normal);
         }
 
         @Test
-        @DisplayName("a present resource id takes priority over bundleEntryIndex")
-        void presentResourceIdTakesPriorityOverBundleEntryIndex() {
-            SourceMetadata metadata = metadataWithTraceId("ef1cb56375", 5);
+        @DisplayName("a change in one nested field (provisional -> confirmed) produces a new id")
+        void nestedFieldChangeProducesANewId() {
+            String provisional = eventIdGenerator.generate(resource("""
+                    {"resourceType":"Condition","id":"cfa51b6b2491c19e",
+                     "verificationStatus":{"coding":[{"code":"provisional"}]}}
+                    """));
+            String confirmed = eventIdGenerator.generate(resource("""
+                    {"resourceType":"Condition","id":"cfa51b6b2491c19e",
+                     "verificationStatus":{"coding":[{"code":"confirmed"}]}}
+                    """));
 
-            String withResourceId = eventIdGenerator.generate(metadata, "resource-001");
-            String withoutResourceId = eventIdGenerator.generate(metadata, null);
+            assertThat(confirmed).isNotEqualTo(provisional);
+        }
 
-            assertThat(withResourceId).isNotEqualTo(withoutResourceId);
+        @Test
+        @DisplayName("two resources with the same content but different ids get different ids")
+        void differentResourceIdsProduceDifferentIds() {
+            String firstVital = eventIdGenerator.generate(resource("""
+                    {"resourceType":"Observation","id":"obs-001","status":"final"}
+                    """));
+            String secondVital = eventIdGenerator.generate(resource("""
+                    {"resourceType":"Observation","id":"obs-002","status":"final"}
+                    """));
+
+            assertThat(secondVital).isNotEqualTo(firstVital);
+        }
+
+        @Test
+        @DisplayName("array order is part of the content — reordered codings produce a new id")
+        void arrayOrderIsPartOfTheContent() {
+            String typeFirst = eventIdGenerator.generate(resource("""
+                    {"resourceType":"Encounter","id":"e1","type":[{"coding":[{"code":"AMB"},{"code":"11429006"}]}]}
+                    """));
+            String typeSwapped = eventIdGenerator.generate(resource("""
+                    {"resourceType":"Encounter","id":"e1","type":[{"coding":[{"code":"11429006"},{"code":"AMB"}]}]}
+                    """));
+
+            assertThat(typeSwapped).isNotEqualTo(typeFirst);
         }
     }
 
-    @Nested
-    @DisplayName("traceId absent — falls back to a random, non-deterministic id")
-    class TraceIdAbsentFallback {
+    @Test
+    @DisplayName("the generated id is a well-formed UUID v5")
+    void generatedIdIsAWellFormedUuidV5() {
+        UUID eventId = UUID.fromString(eventIdGenerator.generate(resource(PROPOSED_CONSENT)));
 
-        @Test
-        @DisplayName("a null traceId produces a different id on every call, even with identical resource id")
-        void nullTraceIdProducesRandomIdEveryCall() {
-            SourceMetadata metadata = metadataWithTraceId(null, 0);
-
-            String firstCall = eventIdGenerator.generate(metadata, "resource-001");
-            String secondCall = eventIdGenerator.generate(metadata, "resource-001");
-
-            assertThat(firstCall).isNotEqualTo(secondCall);
-        }
-
-        @ParameterizedTest
-        @ValueSource(strings = {"", "   "})
-        @DisplayName("a blank traceId is treated the same as a null one — random, non-deterministic id")
-        void blankTraceIdAlsoProducesRandomId(String blankTraceId) {
-            SourceMetadata metadata = metadataWithTraceId(blankTraceId, 0);
-
-            String firstCall = eventIdGenerator.generate(metadata, "resource-001");
-            String secondCall = eventIdGenerator.generate(metadata, "resource-001");
-
-            assertThat(firstCall).isNotEqualTo(secondCall);
-        }
-
-        @Test
-        @DisplayName("the random fallback id is still a well-formed UUID string")
-        void randomFallbackIdIsAWellFormedUuid() {
-            String eventId = eventIdGenerator.generate(metadataWithTraceId(null, 0), "resource-001");
-
-            assertThat(UUID.fromString(eventId)).isNotNull();
-        }
+        assertThat(eventId.version()).isEqualTo(5);
     }
 }

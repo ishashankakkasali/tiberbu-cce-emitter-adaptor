@@ -56,6 +56,9 @@ public class SourceAdaptorService {
     private static final String META_FIELD = "meta";
     private static final String TRACE_ID_FIELD = "traceId";
 
+    /** The Collector stores {@code correlationid} in {@code inbound_event_log.correlation_id VARCHAR(100)}. */
+    private static final int COLLECTOR_CORRELATION_ID_MAX_LENGTH = 100;
+
     private final BundleEntryExtractor bundleEntryExtractor;
     private final FhirResourceParser fhirResourceParser;
     private final PatientIdExtractor patientIdExtractor;
@@ -88,10 +91,9 @@ public class SourceAdaptorService {
      * Adapts every candidate entry in one inbound request.
      *
      * <p>Request-level metadata (source, correlation id, processing time,
-     * request path, trace id) is resolved once, before the loop — it's the
-     * same for every entry in the bundle. Entry-level metadata (facility id,
-     * bundle entry index) is resolved fresh per entry inside {@link
-     * #processBundleEntry}.
+     * request path) is resolved once, before the loop — it's the same for
+     * every entry in the bundle. Entry-level metadata (facility id and name)
+     * is resolved fresh per entry inside {@link #processBundleEntry}.
      *
      * @param inboundRequest the normalized inbound request
      * @return one {@link BundleEntryResult} per candidate bundle entry, in bundle
@@ -107,15 +109,14 @@ public class SourceAdaptorService {
             return List.of(); // no candidates at all — caller reports this as "ignored"
         }
 
-        String correlationId = UUID.randomUUID().toString(); // same value stamped on every entry in this bundle
+        String correlationId = correlationIdFor(rawRequestBody); // same value stamped on every entry in this bundle
         OffsetDateTime eventTime = OffsetDateTime.now(ZoneOffset.UTC); // adaptor's own processing time, never meta.timestamp
-        String traceId = extractTraceId(rawRequestBody); // meta.traceId — primary key for the deterministic event id
         String sourcePath = inboundRequest.getRequestPath();
 
         List<BundleEntryResult> bundleEntryResults = new ArrayList<>(bundleEntries.size());
         for (BundleEntry bundleEntry : bundleEntries) {
             // each entry is processed independently — one entry's outcome never affects another
-            bundleEntryResults.add(processBundleEntry(bundleEntry, correlationId, eventTime, traceId, sourcePath));
+            bundleEntryResults.add(processBundleEntry(bundleEntry, correlationId, eventTime, sourcePath));
         }
         return bundleEntryResults;
     }
@@ -131,7 +132,7 @@ public class SourceAdaptorService {
      * facility-filter and CloudEvent-building steps below it.
      */
     private BundleEntryResult processBundleEntry(
-            BundleEntry bundleEntry, String correlationId, OffsetDateTime eventTime, String traceId, String sourcePath) {
+            BundleEntry bundleEntry, String correlationId, OffsetDateTime eventTime, String sourcePath) {
         String patientId = null; // declared here so it still reaches the FAILED result even if extraction itself throws
         try {
             IBaseResource resource = fhirResourceParser.parse(bundleEntry.resourceJson());
@@ -141,7 +142,7 @@ public class SourceAdaptorService {
             String facilityName = facilityDetails != null ? facilityDetails.facilityName() : null;
 
             SourceMetadata sourceMetadata = new SourceMetadata(
-                    sourceIdentifier, facilityId, facilityName, correlationId, eventTime, sourcePath, traceId, bundleEntry.bundleEntryIndex());
+                    sourceIdentifier, facilityId, facilityName, correlationId, eventTime, sourcePath);
 
             try {
                 facilityFilter.enforceFilter(facilityId, sourceIdentifier);
@@ -167,15 +168,27 @@ public class SourceAdaptorService {
     }
 
     /**
-     * Reads {@code meta.traceId} from the inbound envelope — the primary
-     * input to {@code EventIdGenerator}'s deterministic CloudEvents id.
+     * The correlation id for every entry of one request: tibERbu's own {@code
+     * meta.traceId}, so an event in CCE can be traced back to the tibERbu
+     * submission it came from — the same role the OpenHIM transaction id plays
+     * for the OpenHIM emitter. Falls back to a generated UUID when the envelope
+     * has no usable {@code traceId}: absent, blank, or longer than the
+     * Collector's column ({@value #COLLECTOR_CORRELATION_ID_MAX_LENGTH}
+     * characters).
      *
      * <p>Re-parses {@code rawRequestBody} independently of {@link
      * #bundleEntryExtractor}, which deliberately never reads {@code meta} at
-     * all (see its own class javadoc) — keeping that extractor's
-     * single-purpose contract intact was judged worth one extra cheap JSON
-     * parse here, done once per request rather than per entry.
-     *
+     * all — once per request, not per entry.
+     */
+    private String correlationIdFor(String rawRequestBody) {
+        String traceId = extractTraceId(rawRequestBody);
+        if (traceId == null || traceId.length() > COLLECTOR_CORRELATION_ID_MAX_LENGTH) {
+            return UUID.randomUUID().toString();
+        }
+        return traceId;
+    }
+
+    /**
      * @return {@code meta.traceId}, or {@code null} when the body isn't valid
      *         JSON, has no {@code meta} object, or {@code traceId} is absent/blank
      */
