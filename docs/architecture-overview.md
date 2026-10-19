@@ -145,10 +145,12 @@ org.openphc.tiberbu.cce.emitter/
 ├── fhir/                                          # FHIR utilities
 │   ├── BundleEntryExtractor.java                  #   Bundle-first extraction: skip any confirmed Patient entry, yield rest as BundleEntry
 │   ├── BundleEntry.java                           #   (index, resourceJson, resourceType) for one extracted entry
-│   ├── ClinicalEventTimeExtractor.java            #   Clinical time of a resource — copy of cce-common-util's class of the same name
+│   ├── ClinicalEventTimeExtractor.java            #   Clinical time of a resource — the same field per type the Collector and Matcher use
 │   ├── FhirResourceParser.java                    #   HAPI FHIR parse of one entry's resourceJson (fresh IParser per call)
 │   ├── FacilityIdExtractor.java                   #   Facility ID: the resource's organization reference, based on real tibERbu data
-│   └── PatientIdExtractor.java                    #   Extract patient identifier from FHIR resources
+│   ├── ParentResourceTypeRank.java                #   Parent-first rank enum: EPISODE_OF_CARE 0, ENCOUNTER 1, OTHER_RESOURCE 2 (lower forwarded first)
+│   ├── PatientIdExtractor.java                    #   Extract patient identifier from FHIR resources
+│   └── FhirResourceTypeDetector.java              #   resourceType of a resource → HAPI ResourceType
 │
 ├── filter/                                        # Facility filter
 │   ├── FacilityFilter.java                        #   Spring bean: enforceFilter() — throws on deny, increments counter

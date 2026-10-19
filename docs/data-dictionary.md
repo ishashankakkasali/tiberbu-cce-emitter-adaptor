@@ -297,8 +297,8 @@ Only when **every** candidate entry ends in a genuine failure (none forwarded, n
 
 tibERbu lists a bundle's children before their parents (e.g. a ServiceRequest, then its Encounter, then the EpisodeOfCare). `InboundEventService` forwards the candidate entries to the Collector by clinical time instead (`BundleEntryForwardingOrder`):
 
-1. **Clinical time**, earliest first: the same field per resource type that the Collector and Matcher use (`ClinicalEventTimeExtractor`, a copy of the cce-common-util class of the same name). A date-only value counts as midnight of that date.
-2. On a tie, **parent first**: EpisodeOfCare, then Encounter, then everything else.
+1. **Clinical time**, earliest first: the same field per resource type that the Collector and Matcher use (`ClinicalEventTimeExtractor`). A date-only value counts as midnight of that date.
+2. On a tie, **parent first**: EpisodeOfCare, then Encounter, then everything else (`ParentResourceTypeRank`: ranks 0, 1 and 2, lower forwarded first). The resource type is read with `FhirResourceTypeDetector`.
 3. Then **bundle order**.
 
 An entry without a clinical time is forwarded after every entry that has one. Facility-filtered and failed entries are never forwarded; they are handled after the forwarded ones. The response's `events[]` stays in bundle order.

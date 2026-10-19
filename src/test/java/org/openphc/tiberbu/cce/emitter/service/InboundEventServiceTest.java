@@ -15,6 +15,8 @@ import org.openphc.tiberbu.cce.emitter.config.EmitterProperties;
 import org.openphc.tiberbu.cce.emitter.exception.CollectorClientException;
 import org.openphc.tiberbu.cce.emitter.exception.CollectorForwardingException;
 import org.openphc.tiberbu.cce.emitter.exception.PatientIdNotFoundException;
+import org.openphc.tiberbu.cce.emitter.fhir.ClinicalEventTimeExtractor;
+import org.openphc.tiberbu.cce.emitter.fhir.FhirResourceTypeDetector;
 import org.openphc.tiberbu.cce.emitter.model.BundleEntryResult;
 import org.openphc.tiberbu.cce.emitter.model.CloudEventDto;
 import org.openphc.tiberbu.cce.emitter.model.CollectorResponse;
@@ -60,7 +62,12 @@ class InboundEventServiceTest {
     private InboundEventService serviceUnderTest() {
         return new InboundEventService(
                 sourceAdaptorService, collectorForwardingService, new SimpleMeterRegistry(),
-                new EmitterProperties("tiberbu"));
+                new EmitterProperties("tiberbu"), bundleEntryForwardingOrder());
+    }
+
+    private static BundleEntryForwardingOrder bundleEntryForwardingOrder() {
+        return new BundleEntryForwardingOrder(
+                new FhirResourceTypeDetector(), new ClinicalEventTimeExtractor(new SimpleMeterRegistry()));
     }
 
     private InboundRequest sampleRequest() {
@@ -284,7 +291,7 @@ class InboundEventServiceTest {
         void eventsReceivedIncrementedOncePerCall() {
             SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
             InboundEventService service = new InboundEventService(
-                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"));
+                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"), bundleEntryForwardingOrder());
             when(sourceAdaptorService.processBundleEntries(any())).thenReturn(List.of());
 
             service.process(sampleRequest());
@@ -300,7 +307,7 @@ class InboundEventServiceTest {
         void eventsForwardedCountsEveryEntryThatReachesTheCollector() {
             SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
             InboundEventService service = new InboundEventService(
-                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"));
+                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"), bundleEntryForwardingOrder());
             CloudEventDto accepted = cloudEvent("Consent");
             CloudEventDto duplicate = cloudEvent("Observation");
             when(sourceAdaptorService.processBundleEntries(any())).thenReturn(List.of(
@@ -320,7 +327,7 @@ class InboundEventServiceTest {
         void eventsDuplicateCountsOnlyDuplicateOutcomes() {
             SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
             InboundEventService service = new InboundEventService(
-                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"));
+                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"), bundleEntryForwardingOrder());
             CloudEventDto accepted = cloudEvent("Consent");
             CloudEventDto duplicate = cloudEvent("Observation");
             when(sourceAdaptorService.processBundleEntries(any())).thenReturn(List.of(
@@ -339,7 +346,7 @@ class InboundEventServiceTest {
         void entriesReceivedCountsEveryCandidateEntryRegardlessOfOutcome() {
             SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
             InboundEventService service = new InboundEventService(
-                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"));
+                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"), bundleEntryForwardingOrder());
             CloudEventDto forwardable = cloudEvent("Consent");
             TransformationResult skippedResult = TransformationResult.skipped(1, "Consent", PATIENT_ID, "NOT_IN_ALLOWLIST");
             TransformationResult failedResult = TransformationResult.failed(2, "Observation", null, "no patient reference");
@@ -360,7 +367,7 @@ class InboundEventServiceTest {
         void entriesFailedCountsOnlyAdaptationStageFailures() {
             SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
             InboundEventService service = new InboundEventService(
-                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"));
+                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"), bundleEntryForwardingOrder());
             CloudEventDto forwardable = cloudEvent("Consent");
             TransformationResult skippedResult = TransformationResult.skipped(1, "Consent", PATIENT_ID, "NOT_IN_ALLOWLIST");
             TransformationResult failedResult = TransformationResult.failed(2, "Observation", null, "no patient reference");

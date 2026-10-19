@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.openphc.tiberbu.cce.emitter.fhir.ClinicalEventTimeExtractor;
+import org.openphc.tiberbu.cce.emitter.fhir.FhirResourceTypeDetector;
 import org.openphc.tiberbu.cce.emitter.model.BundleEntryResult;
 import org.openphc.tiberbu.cce.emitter.model.CloudEventDto;
 
@@ -22,7 +23,8 @@ class BundleEntryForwardingOrderTest {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final BundleEntryForwardingOrder bundleEntryForwardingOrder =
-            new BundleEntryForwardingOrder(new ClinicalEventTimeExtractor(new SimpleMeterRegistry()));
+            new BundleEntryForwardingOrder(
+                    new FhirResourceTypeDetector(), new ClinicalEventTimeExtractor(new SimpleMeterRegistry()));
 
     private static BundleEntryResult entry(int bundleEntryIndex, String resourceJson) {
         try {

@@ -6,7 +6,6 @@ import org.openphc.tiberbu.cce.emitter.adaptor.SourceAdaptorService;
 import org.openphc.tiberbu.cce.emitter.config.EmitterProperties;
 import org.openphc.tiberbu.cce.emitter.exception.CollectorClientException;
 import org.openphc.tiberbu.cce.emitter.exception.CollectorForwardingException;
-import org.openphc.tiberbu.cce.emitter.fhir.ClinicalEventTimeExtractor;
 import org.openphc.tiberbu.cce.emitter.model.BundleEntryResult;
 import org.openphc.tiberbu.cce.emitter.model.CloudEventDto;
 import org.openphc.tiberbu.cce.emitter.model.CollectorResponse;
@@ -82,12 +81,13 @@ public class InboundEventService {
             SourceAdaptorService sourceAdaptorService,
             CollectorForwardingService collectorForwardingService,
             MeterRegistry meterRegistry,
-            EmitterProperties emitterProperties) {
+            EmitterProperties emitterProperties,
+            BundleEntryForwardingOrder bundleEntryForwardingOrder) {
         this.sourceAdaptorService = sourceAdaptorService;
         this.collectorForwardingService = collectorForwardingService;
         this.meterRegistry = meterRegistry;
         this.sourceIdentifier = emitterProperties.source();
-        this.bundleEntryForwardingOrder = new BundleEntryForwardingOrder(new ClinicalEventTimeExtractor(meterRegistry));
+        this.bundleEntryForwardingOrder = bundleEntryForwardingOrder;
         this.entriesForwardedCounter = Counter.builder("tiberbu.cce.emitter.entries.forwarded")
                 .description("CloudEvents that reached the Collector (accepted or duplicate)")
                 .tag("source", sourceIdentifier)
