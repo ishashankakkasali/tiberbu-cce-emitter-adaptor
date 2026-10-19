@@ -1,11 +1,13 @@
 package org.openphc.tiberbu.cce.emitter.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.openphc.tiberbu.cce.emitter.adaptor.SourceAdaptorService;
@@ -13,6 +15,8 @@ import org.openphc.tiberbu.cce.emitter.config.EmitterProperties;
 import org.openphc.tiberbu.cce.emitter.exception.CollectorClientException;
 import org.openphc.tiberbu.cce.emitter.exception.CollectorForwardingException;
 import org.openphc.tiberbu.cce.emitter.exception.PatientIdNotFoundException;
+import org.openphc.tiberbu.cce.emitter.fhir.ClinicalEventTimeExtractor;
+import org.openphc.tiberbu.cce.emitter.fhir.FhirResourceTypeDetector;
 import org.openphc.tiberbu.cce.emitter.model.BundleEntryResult;
 import org.openphc.tiberbu.cce.emitter.model.CloudEventDto;
 import org.openphc.tiberbu.cce.emitter.model.CollectorResponse;
@@ -28,6 +32,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -57,7 +62,12 @@ class InboundEventServiceTest {
     private InboundEventService serviceUnderTest() {
         return new InboundEventService(
                 sourceAdaptorService, collectorForwardingService, new SimpleMeterRegistry(),
-                new EmitterProperties("tiberbu"));
+                new EmitterProperties("tiberbu"), bundleEntryForwardingOrder());
+    }
+
+    private static BundleEntryForwardingOrder bundleEntryForwardingOrder() {
+        return new BundleEntryForwardingOrder(
+                new FhirResourceTypeDetector(), new ClinicalEventTimeExtractor(new SimpleMeterRegistry()));
     }
 
     private InboundRequest sampleRequest() {
@@ -281,7 +291,7 @@ class InboundEventServiceTest {
         void eventsReceivedIncrementedOncePerCall() {
             SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
             InboundEventService service = new InboundEventService(
-                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"));
+                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"), bundleEntryForwardingOrder());
             when(sourceAdaptorService.processBundleEntries(any())).thenReturn(List.of());
 
             service.process(sampleRequest());
@@ -297,7 +307,7 @@ class InboundEventServiceTest {
         void eventsForwardedCountsEveryEntryThatReachesTheCollector() {
             SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
             InboundEventService service = new InboundEventService(
-                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"));
+                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"), bundleEntryForwardingOrder());
             CloudEventDto accepted = cloudEvent("Consent");
             CloudEventDto duplicate = cloudEvent("Observation");
             when(sourceAdaptorService.processBundleEntries(any())).thenReturn(List.of(
@@ -317,7 +327,7 @@ class InboundEventServiceTest {
         void eventsDuplicateCountsOnlyDuplicateOutcomes() {
             SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
             InboundEventService service = new InboundEventService(
-                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"));
+                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"), bundleEntryForwardingOrder());
             CloudEventDto accepted = cloudEvent("Consent");
             CloudEventDto duplicate = cloudEvent("Observation");
             when(sourceAdaptorService.processBundleEntries(any())).thenReturn(List.of(
@@ -336,7 +346,7 @@ class InboundEventServiceTest {
         void entriesReceivedCountsEveryCandidateEntryRegardlessOfOutcome() {
             SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
             InboundEventService service = new InboundEventService(
-                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"));
+                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"), bundleEntryForwardingOrder());
             CloudEventDto forwardable = cloudEvent("Consent");
             TransformationResult skippedResult = TransformationResult.skipped(1, "Consent", PATIENT_ID, "NOT_IN_ALLOWLIST");
             TransformationResult failedResult = TransformationResult.failed(2, "Observation", null, "no patient reference");
@@ -357,7 +367,7 @@ class InboundEventServiceTest {
         void entriesFailedCountsOnlyAdaptationStageFailures() {
             SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
             InboundEventService service = new InboundEventService(
-                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"));
+                    sourceAdaptorService, collectorForwardingService, meterRegistry, new EmitterProperties("tiberbu"), bundleEntryForwardingOrder());
             CloudEventDto forwardable = cloudEvent("Consent");
             TransformationResult skippedResult = TransformationResult.skipped(1, "Consent", PATIENT_ID, "NOT_IN_ALLOWLIST");
             TransformationResult failedResult = TransformationResult.failed(2, "Observation", null, "no patient reference");
@@ -372,6 +382,83 @@ class InboundEventServiceTest {
             assertThat(meterRegistry.counter(
                     "tiberbu.cce.emitter.entries.failed", "source", "tiberbu", "reason", "PatientIdNotFoundException").count())
                     .isEqualTo(1.0);
+        }
+    }
+
+    @Nested
+    @DisplayName("forwarding order")
+    class ForwardingOrder {
+
+        private CloudEventDto timedCloudEvent(String type, String timeField, String time) {
+            ObjectMapper objectMapper = new ObjectMapper();
+            ObjectNode resource = objectMapper.createObjectNode().put("resourceType", type);
+            if ("period".equals(timeField)) {
+                resource.putObject("period").put("start", time);
+            } else {
+                resource.put(timeField, time);
+            }
+            return new CloudEventDto("1.0", "evt-" + type, "tiberbu", type, PATIENT_ID,
+                    "2026-10-08T10:56:47Z", "application/fhir+json", "FAC-0001", null, null, "trace-001", resource);
+        }
+
+        @Test
+        @DisplayName("entries are forwarded by clinical time, and the response still lists them in bundle order")
+        void forwardsByClinicalTimeAndRespondsInBundleOrder() {
+            CloudEventDto serviceRequest = timedCloudEvent("ServiceRequest", "authoredOn", "2026-10-08T13:56:40+03:00");
+            CloudEventDto encounter = timedCloudEvent("Encounter", "period", "2026-10-08T13:53:00+03:00");
+            CloudEventDto episodeOfCare = timedCloudEvent("EpisodeOfCare", "period", "2026-10-08T13:51:30+03:00");
+            when(sourceAdaptorService.processBundleEntries(any())).thenReturn(List.of(
+                    BundleEntryResult.readyToForward(1, serviceRequest),
+                    BundleEntryResult.readyToForward(2, encounter),
+                    BundleEntryResult.readyToForward(3, episodeOfCare)));
+            when(collectorForwardingService.forward(any())).thenReturn(acceptedResponse());
+
+            InboundOutcome outcome = serviceUnderTest().process(sampleRequest());
+
+            InOrder forwardingSequence = inOrder(collectorForwardingService);
+            forwardingSequence.verify(collectorForwardingService).forward(episodeOfCare);
+            forwardingSequence.verify(collectorForwardingService).forward(encounter);
+            forwardingSequence.verify(collectorForwardingService).forward(serviceRequest);
+            ProcessedEventsResponse response = (ProcessedEventsResponse) outcome.responseBody();
+            assertThat(response.events()).extracting(ProcessedEventsResponse.EventDetail::entryIndex).containsExactly(1, 2, 3);
+        }
+
+        @Test
+        @DisplayName("a facility-filtered entry is not sent; the others are still forwarded by clinical time")
+        void filteredEntryIsNotSentAndTheRestAreForwardedByClinicalTime() {
+            CloudEventDto encounter = timedCloudEvent("Encounter", "period", "2026-10-08T13:53:00+03:00");
+            CloudEventDto episodeOfCare = timedCloudEvent("EpisodeOfCare", "period", "2026-10-08T13:51:30+03:00");
+            when(sourceAdaptorService.processBundleEntries(any())).thenReturn(List.of(
+                    BundleEntryResult.skipped(TransformationResult.skipped(1, "Consent", PATIENT_ID, "facility not allowed")),
+                    BundleEntryResult.readyToForward(2, encounter),
+                    BundleEntryResult.readyToForward(3, episodeOfCare)));
+            when(collectorForwardingService.forward(any())).thenReturn(acceptedResponse());
+
+            InboundOutcome outcome = serviceUnderTest().process(sampleRequest());
+
+            InOrder forwardingSequence = inOrder(collectorForwardingService);
+            forwardingSequence.verify(collectorForwardingService).forward(episodeOfCare);
+            forwardingSequence.verify(collectorForwardingService).forward(encounter);
+            forwardingSequence.verifyNoMoreInteractions();
+            ProcessedEventsResponse response = (ProcessedEventsResponse) outcome.responseBody();
+            assertThat(response.events()).extracting(ProcessedEventsResponse.EventDetail::entryIndex).containsExactly(1, 2, 3);
+            assertThat(response.events().get(0).outcome()).isEqualTo(TransformationResult.OUTCOME_SKIPPED);
+        }
+
+        @Test
+        @DisplayName("when every entry fails, the failure re-thrown is the one earliest in the bundle")
+        void allFailedRethrowsTheFailureEarliestInTheBundle() {
+            CloudEventDto laterInBundle = timedCloudEvent("ServiceRequest", "authoredOn", "2026-10-08T13:00:00+03:00");
+            CloudEventDto earlierInBundle = timedCloudEvent("Observation", "effectiveDateTime", "2026-10-08T14:00:00+03:00");
+            when(sourceAdaptorService.processBundleEntries(any())).thenReturn(List.of(
+                    BundleEntryResult.readyToForward(1, earlierInBundle),
+                    BundleEntryResult.readyToForward(2, laterInBundle)));
+            when(collectorForwardingService.forward(laterInBundle)).thenThrow(new CollectorForwardingException("entry 2 down"));
+            when(collectorForwardingService.forward(earlierInBundle)).thenThrow(new CollectorForwardingException("entry 1 down"));
+
+            assertThatExceptionOfType(CollectorForwardingException.class)
+                    .isThrownBy(() -> serviceUnderTest().process(sampleRequest()))
+                    .withMessageContaining("entry 1 down");
         }
     }
 }
