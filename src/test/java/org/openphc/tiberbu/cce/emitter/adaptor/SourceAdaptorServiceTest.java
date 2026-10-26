@@ -40,6 +40,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SourceAdaptorServiceTest {
 
+    /**
+     * The redactor as production runs it (enabled, default rules): envelope building and adaptor
+     * routing must behave the same with redaction on.
+     */
+    private static org.openphc.tiberbu.cce.emitter.redaction.ClinicalDataRedactor productionRedactor() {
+        return new org.openphc.tiberbu.cce.emitter.redaction.ClinicalDataRedactor(
+                new org.openphc.tiberbu.cce.emitter.redaction.ClinicalDataRedactionProperties(true, null),
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+    }
+
     private static final String PATIENT_ID = "KE-SHRP-170CDF0A-1363-4972-B36A";
     private static final String ALLOWED_ORGANIZATION_ID = "0030";
 
@@ -50,7 +60,7 @@ class SourceAdaptorServiceTest {
                 new PatientIdExtractor(),
                 new FacilityIdExtractor(),
                 new FacilityFilter(FacilityFilterProperties.of(List.of(allowedFacilityIds)), new SimpleMeterRegistry()),
-                new CloudEventEnvelopeBuilder(new EventIdGenerator(), new ObjectMapper()),
+                new CloudEventEnvelopeBuilder(new EventIdGenerator(), new ObjectMapper(), productionRedactor()),
                 new ObjectMapper(),
                 new EmitterProperties("tiberbu"));
     }

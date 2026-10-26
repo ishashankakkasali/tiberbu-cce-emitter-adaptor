@@ -356,6 +356,8 @@ services:
 
 > **Facility filter tip:** `FACILITY_FILTER_IDS` is the only env var needed to control which facility IDs are admitted. Update it and do a rolling restart — no rebuild required. Skipped events return `200 OK` with `status: "skipped"` — a normal outcome, not an error, so callers should not retry.
 
+> **Redaction tip:** `REDACTION_ENABLED=false` turns clinical-data redaction off in any profile — full clinical payloads then reach the Collector, so keep it to a time-boxed debugging window. Restart, no rebuild. Changing the rules themselves is covered in [data-dictionary.md §3.7](data-dictionary.md#37-clinical-data-redaction-properties).
+
 ### WireMock Stub for Collector
 
 Create `wiremock/mappings/collector-events.json`:

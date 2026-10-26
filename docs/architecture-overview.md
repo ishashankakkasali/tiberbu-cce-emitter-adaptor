@@ -139,7 +139,7 @@ org.openphc.tiberbu.cce.emitter/
 │   └── SourceAdaptorService.java                  #   Resolves source from config, FHIR parsing + CloudEvents building
 │
 ├── cloudevents/                                   # CloudEvents envelope construction
-│   ├── CloudEventEnvelopeBuilder.java             #   Builds CloudEvents v1.0 JSON
+│   ├── CloudEventEnvelopeBuilder.java             #   Builds CloudEvents v1.0 JSON (id from the full resource, then redacts data)
 │   └── EventIdGenerator.java                      #   UUID v5 of the SHA-256 of the whole resource
 │
 ├── fhir/                                          # FHIR utilities
@@ -151,6 +151,10 @@ org.openphc.tiberbu.cce.emitter/
 │   ├── ParentResourceTypeRank.java                #   Parent-first rank enum: EPISODE_OF_CARE 0, ENCOUNTER 1, OTHER_RESOURCE 2 (lower forwarded first)
 │   ├── PatientIdExtractor.java                    #   Extract patient identifier from FHIR resources
 │   └── FhirResourceTypeDetector.java              #   resourceType of a resource → HAPI ResourceType
+│
+├── redaction/                                     # Clinical-data redaction
+│   ├── ClinicalDataRedactor.java                  #   Removes the configured clinical fields from a CloudEvent's data
+│   └── ClinicalDataRedactionProperties.java       #   @ConfigurationProperties("cce.emitter.redaction") — "*" rule + one rule per resource type
 │
 ├── filter/                                        # Facility filter
 │   ├── FacilityFilter.java                        #   Spring bean: enforceFilter() — throws on deny, increments counter
@@ -311,7 +315,7 @@ by configuration alone — no code change.
 | **Liveness** | `/actuator/health/liveness` |
 | **Readiness** | `/actuator/health/readiness` |
 | **Metrics** | `/actuator/prometheus` |
-| **Key env vars** | `CCE_COLLECTOR_URL`, `KEYCLOAK_HOST`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`, `FACILITY_FILTER_IDS`, `SPRING_PROFILES_ACTIVE` |
+| **Key env vars** | `CCE_COLLECTOR_URL`, `KEYCLOAK_HOST`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`, `FACILITY_FILTER_IDS`, `REDACTION_ENABLED`, `SPRING_PROFILES_ACTIVE` |
 
 ### Docker
 

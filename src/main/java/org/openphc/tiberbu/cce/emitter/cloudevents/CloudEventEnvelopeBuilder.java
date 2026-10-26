@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.openphc.tiberbu.cce.emitter.exception.FhirMappingException;
 import org.openphc.tiberbu.cce.emitter.model.CloudEventDto;
 import org.openphc.tiberbu.cce.emitter.model.SourceMetadata;
+import org.openphc.tiberbu.cce.emitter.redaction.ClinicalDataRedactor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -23,7 +24,7 @@ import java.time.format.DateTimeFormatter;
  * {@code source} from {@code sourceMetadata.sourceIdentifier()} (never {@code
  * meta.source} from the inbound envelope), {@code id} from {@link
  * EventIdGenerator}, and {@code data} holding the parsed {@code Consent}
- * resource.
+ * resource with its clinical content redacted ({@link ClinicalDataRedactor}).
  */
 @Component
 public class CloudEventEnvelopeBuilder {
@@ -43,10 +44,13 @@ public class CloudEventEnvelopeBuilder {
 
     private final EventIdGenerator eventIdGenerator;
     private final ObjectMapper objectMapper;
+    private final ClinicalDataRedactor clinicalDataRedactor;
 
-    public CloudEventEnvelopeBuilder(EventIdGenerator eventIdGenerator, ObjectMapper objectMapper) {
+    public CloudEventEnvelopeBuilder(EventIdGenerator eventIdGenerator, ObjectMapper objectMapper,
+                                     ClinicalDataRedactor clinicalDataRedactor) {
         this.eventIdGenerator = eventIdGenerator;
         this.objectMapper = objectMapper;
+        this.clinicalDataRedactor = clinicalDataRedactor;
     }
 
     /**
@@ -55,8 +59,14 @@ public class CloudEventEnvelopeBuilder {
      * <p>Step 1: parse {@code fhirJson} into the {@code data} field's {@link
      * JsonNode}. Step 2: derive the event {@code id} from that same parsed
      * node's content — no second parse — with {@link EventIdGenerator}.
-     * Step 3: assemble every other field from {@code sourceMetadata} and the
-     * method's own parameters.
+     * Step 3: redact the clinical content from {@code data} ({@link
+     * ClinicalDataRedactor}). Step 4: assemble every other field from
+     * {@code sourceMetadata} and the method's own parameters.
+     *
+     * <p>The id is derived <em>before</em> redaction, from the complete
+     * resource: two versions of a resource that differ only in redacted
+     * content (e.g. a corrected Observation value) must still get different
+     * ids, or the Collector would drop the correction as a duplicate.
      *
      * @param fhirJson       the entry's FHIR resource, as JSON text (from {@code
      *                       BundleEntry#resourceJson})
@@ -72,7 +82,10 @@ public class CloudEventEnvelopeBuilder {
      */
     public CloudEventDto build(String fhirJson, String patientId, String resourceType, SourceMetadata sourceMetadata) {
         JsonNode data = parseToJsonNode(fhirJson);
+        // id from the complete resource first: a change only in redacted content must still change the id
         String eventId = eventIdGenerator.generate(data);
+        // then strip the clinical content; everything the Collector persists is the minimised form
+        data = clinicalDataRedactor.redact(data);
         String eventTime = sourceMetadata.eventTime().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
 
         CloudEventDto cloudEvent = new CloudEventDto(

@@ -36,6 +36,7 @@ services:
       - SERVER_PORT=8081
       - CCE_COLLECTOR_URL=http://collector-stub:8080
       - FACILITY_FILTER_IDS=          # empty = filter inactive
+      - REDACTION_ENABLED=true        # false = forward full clinical payloads (debugging only)
     depends_on:
       collector-stub:
         condition: service_started

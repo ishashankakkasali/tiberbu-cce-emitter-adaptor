@@ -1,0 +1,304 @@
+package org.openphc.tiberbu.cce.emitter.redaction;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.env.YamlPropertySourceLoader;
+import org.springframework.core.env.MapPropertySource;
+import org.springframework.core.env.PropertySource;
+import org.springframework.core.env.StandardEnvironment;
+import org.springframework.core.io.ClassPathResource;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Binds the <b>real</b> {@code application.yml} and asserts on the rules that come out.
+ *
+ * <p>Redaction is a compliance control whose failure mode is silent. A typo in the YAML, or the
+ * folded comma-separated {@code fields} scalars not splitting the way we assume, would not throw —
+ * it would quietly forward clinical data to the Collector. {@link ClinicalDataRedactorTest} proves
+ * the redactor honours the rules it is given; this proves the rules production actually ships are
+ * the right ones.
+ *
+ * <p>Assertions are made against the <b>effective</b> set for a resource type — the {@code "*"}
+ * entries plus that type's own — because that, not either list alone, is what gets removed.
+ */
+class RedactionConfigBindingTest {
+
+    private static ClinicalDataRedactionProperties properties;
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    @BeforeAll
+    static void bindRealApplicationYml() throws IOException {
+        properties = bindApplicationYml(Map.of());
+    }
+
+    /** Binds application.yml, with {@code environmentVariables} resolved after it as real env vars are. */
+    private static ClinicalDataRedactionProperties bindApplicationYml(Map<String, Object> environmentVariables)
+            throws IOException {
+        StandardEnvironment environment = new StandardEnvironment();
+        List<PropertySource<?>> sources = new YamlPropertySourceLoader()
+                .load("application.yml", new ClassPathResource("application.yml"));
+        sources.forEach(environment.getPropertySources()::addFirst);
+        environment.getPropertySources().addLast(new MapPropertySource("test-env", environmentVariables));
+
+        return Binder.get(environment)
+                .bind("cce.emitter.redaction", ClinicalDataRedactionProperties.class)
+                .orElseThrow(() -> new AssertionError(
+                        "cce.emitter.redaction is absent from application.yml — redaction would fall "
+                                + "back to Java defaults with nothing auditable in configuration"));
+    }
+
+    /** Everything removed for this resource type: the "*" entries plus the type's own. */
+    private static Set<String> effectiveFor(String resourceType) {
+        Set<String> all = new LinkedHashSet<>(properties.getAllResourceTypesFields());
+        all.addAll(properties.fieldsFor(resourceType));
+        return all;
+    }
+
+    private static List<String> configuredTypes() {
+        return properties.rules().stream()
+                .map(ClinicalDataRedactionProperties.ResourceRule::resourceType)
+                .filter(t -> !ClinicalDataRedactionProperties.ALL_RESOURCE_TYPES.equals(t))
+                .toList();
+    }
+
+    @Test
+    @DisplayName("redaction is enabled in the shipped configuration")
+    void enabledInShippedConfig() {
+        assertThat(properties.enabled()).isTrue();
+    }
+
+    @Test
+    @DisplayName("REDACTION_ENABLED=false switches redaction off and keeps the rules")
+    void redactionEnabledEnvVarSwitchesItOff() throws IOException {
+        ClinicalDataRedactionProperties switchedOff = bindApplicationYml(Map.of("REDACTION_ENABLED", "false"));
+
+        assertThat(switchedOff.enabled()).isFalse();
+        assertThat(switchedOff.rules()).isEqualTo(properties.rules());
+    }
+
+    @Test
+    @DisplayName("the \"*\" rule exists and is not empty")
+    void allTypesRuleExists() {
+        assertThat(properties.getAllResourceTypesFields())
+                .as("without the \"*\" rule, every type would redact only its own extras")
+                .isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("folded comma-separated field lists split into individual entries")
+    void foldedScalarsSplitIntoFieldNames() {
+        // If the folded scalar failed to split, this would be one long comma-joined string.
+        assertThat(properties.getAllResourceTypesFields())
+                .contains("valueString", "valueCodeableConcept", "subject.display");
+        assertThat(properties.getAllResourceTypesFields()).allSatisfy(field -> {
+            assertThat(field).doesNotContain(",");
+            assertThat(field).isEqualTo(field.trim());
+        });
+    }
+
+    @Test
+    @DisplayName("every resource type tibERbu sends has its own entry")
+    void allObservedResourceTypesConfigured() {
+        // every type in tibERbu's inbound_event_log on dev
+        assertThat(configuredTypes()).contains(
+                "Encounter", "Observation", "Condition", "Procedure", "MedicationDispense", "EpisodeOfCare",
+                "Consent", "MedicationRequest", "MedicationAdministration", "AllergyIntolerance",
+                "ServiceRequest", "Composition", "DiagnosticReport");
+    }
+
+    @Test
+    @DisplayName("code is stripped where it is the finding, kept where it is the trigger key")
+    void codeHandledPerResourceType() {
+        for (String type : List.of("Condition", "AllergyIntolerance", "ServiceRequest", "Procedure")) {
+            assertThat(effectiveFor(type))
+                    .as("%s.code is the clinical finding and must be stripped", type)
+                    .contains("code");
+        }
+
+        assertThat(effectiveFor("Observation"))
+                .as("Observation.code is the LOINC trigger key — stripping it breaks protocol matching")
+                .doesNotContain("code");
+    }
+
+    @Test
+    @DisplayName("drug identity is stripped from every medication resource")
+    void medicationResourcesStripTheDrug() {
+        for (String type : List.of("MedicationRequest", "MedicationDispense", "MedicationAdministration")) {
+            assertThat(effectiveFor(type))
+                    .as("%s must not forward which drug was involved", type)
+                    .contains("medicationCodeableConcept");
+        }
+    }
+
+    @Test
+    @DisplayName("every configured type strips value[x] and the patient name via the \"*\" rule")
+    void everyTypeInheritsTheCommonSet() {
+        for (String type : configuredTypes()) {
+            assertThat(effectiveFor(type))
+                    .as("type '%s'", type)
+                    .contains("valueString", "valueQuantity", "valueCodeableConcept",
+                            "subject.display", "patient.display");
+        }
+    }
+
+    @Test
+    @DisplayName("a type with no rule of its own still gets the \"*\" entries")
+    void unknownTypeStillRedacted() {
+        assertThat(effectiveFor("SomeFutureResourceType"))
+                .contains("valueString", "subject.display")
+                // conservative: code may be structural on an unrecognised type
+                .doesNotContain("code");
+    }
+
+    @Test
+    @DisplayName("the patient's name is stripped but the UPID reference is not")
+    void patientNameStrippedNotReference() {
+        assertThat(properties.getAllResourceTypesFields()).contains("subject.display", "patient.display");
+        assertThat(properties.getAllResourceTypesFields())
+                .doesNotContain("subject", "patient", "subject.reference", "patient.reference");
+    }
+
+    @Test
+    @DisplayName("a type-specific entry does not leak onto other types")
+    void typeSpecificEntriesStayScoped() {
+        assertThat(properties.fieldsFor("Encounter"))
+                .contains("hospitalization.dischargeDisposition");
+        assertThat(properties.getAllResourceTypesFields())
+                .as("if this were in the \"*\" rule it would apply to every resource type")
+                .doesNotContain("hospitalization.dischargeDisposition");
+        assertThat(effectiveFor("Procedure")).doesNotContain("hospitalization.dischargeDisposition");
+    }
+
+    @Test
+    @DisplayName("no configured path omits [] where the FHIR element is a repeating one")
+    void configuredPathsDeclareArraysCorrectly() {
+        // FHIR elements with cardinality 0..* that could appear in our paths. A path traversing
+        // one of these without '[]' matches nothing while looking correctly configured.
+        List<String> repeatingElements = List.of(
+                "reaction", "component", "series", "instance", "extension", "performer",
+                "category", "type", "location", "participant", "identifier", "coding");
+
+        List<String> allEntries = new ArrayList<>(properties.getAllResourceTypesFields());
+        properties.rules().forEach(r -> allEntries.addAll(r.fields()));
+
+        for (String entry : allEntries) {
+            String[] segments = entry.split("\\.");
+            for (int i = 0; i < segments.length - 1; i++) {   // leaf is removed by name, so exempt
+                assertThat(repeatingElements)
+                        .as("path '%s' traverses repeating element '%s' without '[]' — "
+                                + "it would redact nothing", entry, segments[i])
+                        .doesNotContain(segments[i]);
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Encounter drops the whole extension array — it can carry clinical data and PII (e.g. the emergency caller)")
+    void encounterExtensionsAreDropped() throws IOException {
+        ClinicalDataRedactor redactor = new ClinicalDataRedactor(properties, new SimpleMeterRegistry());
+
+        // A transfer Encounter whose custom extensions carry diagnosis, drugs and the patient's
+        // name and DOB — the shape that made Encounter.extension a wholesale removal.
+        JsonNode out = redactor.redact(MAPPER.readTree("""
+                {
+                  "resourceType": "Encounter",
+                  "status": "finished",
+                  "type": [{"coding": [{"display": "TRANSFER_ENCOUNTER"}]}],
+                  "subject": {"reference": "Patient/260905-0000-2753"},
+                  "hospitalization": {"origin": {"reference": "Location/abc", "display": "Muhima DH"}},
+                  "location": [{"location": {"reference": "Location/xyz", "display": "Muhima DH"}}],
+                  "extension": [
+                    {"url": "http://example.org/fhir/StructureDefinition/source-facility",
+                     "valueString": "1651"},
+                    {"url": "http://example.org/fhir/StructureDefinition/clinical-presentation",
+                     "extension": [{"url": "presentation",
+                                    "valueString": "Plasmodium malariae malaria without complication"}]},
+                    {"url": "http://example.org/fhir/StructureDefinition/transfer-flags",
+                     "extension": [{"url": "prescriptions",
+                                    "valueString": "Paracetamol, CAPTOPRIL 25MG"}]},
+                    {"url": "http://example.org/fhir/StructureDefinition/patient-demographics",
+                     "extension": [{"url": "name", "valueString": "Test Kyle"},
+                                   {"url": "dob",  "valueString": "2001-01-01"}]},
+                    {"url": "http://example.org/fhir/StructureDefinition/maternity-info",
+                     "extension": [{"url": "fetal-presentation", "valueString": "Breech"}]}
+                  ]
+                }
+                """));
+
+        assertThat(out.has("extension")).as("the whole extension array").isFalse();
+        assertThat(out.toString()).doesNotContain(
+                "Plasmodium", "Paracetamol", "CAPTOPRIL", "Test Kyle", "2001-01-01", "Breech");
+
+        // The Encounter's location and type are not extension content and must survive.
+        assertThat(out.path("hospitalization").path("origin").path("reference").asText())
+                .isEqualTo("Location/abc");
+        assertThat(out.path("location").get(0).path("location").path("reference").asText())
+                .isEqualTo("Location/xyz");
+        assertThat(out.path("type").get(0).path("coding").get(0).path("display").asText())
+                .isEqualTo("TRANSFER_ENCOUNTER");
+    }
+
+    @Test
+    @DisplayName("types whose extensions carry no clinical content keep them — only Encounter, Observation and ServiceRequest drop theirs")
+    void typesWithoutClinicalExtensionsKeepThem() throws IOException {
+        ClinicalDataRedactor redactor = new ClinicalDataRedactor(properties, new SimpleMeterRegistry());
+
+        for (String type : List.of("Condition", "MedicationRequest", "Procedure", "Consent", "MedicationDispense")) {
+            JsonNode out = redactor.redact(MAPPER.readTree("""
+                    {
+                      "resourceType": "%s",
+                      "extension": [
+                        {"url": "http://example.org/fhir/StructureDefinition/source-facility",
+                         "valueString": "1651"},
+                        {"url": "http://example.org/fhir/StructureDefinition/source-system",
+                         "valueString": "tibERbu"}
+                      ]
+                    }
+                    """.formatted(type)));
+
+            assertThat(out.has("extension"))
+                    .as("%s must keep extension", type)
+                    .isTrue();
+            assertThat(out.path("extension").get(0).path("valueString").asText()).isEqualTo("1651");
+        }
+    }
+
+    @Test
+    @DisplayName("the shipped YAML redacts a real Condition end to end")
+    void shippedConfigRedactsARealCondition() throws IOException {
+        ClinicalDataRedactor redactor = new ClinicalDataRedactor(properties, new SimpleMeterRegistry());
+
+        JsonNode redacted = redactor.redact(MAPPER.readTree("""
+                {
+                  "resourceType": "Condition",
+                  "id": "abc-123",
+                  "clinicalStatus": {"coding": [{"code": "active"}]},
+                  "code": {"coding": [{"code": "5A11", "display": "Type 2 diabetes mellitus"}],
+                           "text": "Type 2 diabetes mellitus"},
+                  "subject": {"reference": "Patient/241018-1228-7904", "display": "Jane Doe"},
+                  "recordedDate": "2026-07-24T10:51:53+02:00"
+                }
+                """));
+
+        assertThat(redacted.has("code")).as("the diagnosis").isFalse();
+        assertThat(redacted.path("subject").has("display")).as("the patient name").isFalse();
+
+        // What CCE needs to keep working
+        assertThat(redacted.path("subject").path("reference").asText()).isEqualTo("Patient/241018-1228-7904");
+        assertThat(redacted.path("clinicalStatus").path("coding").get(0).path("code").asText()).isEqualTo("active");
+        assertThat(redacted.path("recordedDate").asText()).isEqualTo("2026-07-24T10:51:53+02:00");
+    }
+}
