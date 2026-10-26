@@ -32,9 +32,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * production {@code inbound_event_log}), its {@code display}-field name
  * extraction, and the "always resolves to something, never throws" contract.
  *
- * <p>Four resource types carry an accessor {@link FacilityIdExtractor}
- * recognizes — {@code Consent.organization}, {@code Encounter.serviceProvider},
- * {@code EpisodeOfCare.managingOrganization}, {@code ServiceRequest.performer}.
+ * <p>The accessors {@link FacilityIdExtractor} recognizes — {@code Consent.organization},
+ * {@code Encounter.serviceProvider}, {@code EpisodeOfCare.managingOrganization},
+ * {@code Composition.custodian}, {@code ServiceRequest.requester} then {@code .performer}.
  * {@code MedicationDispense} and {@code Procedure} carry a {@code location}
  * reference instead, which points at a {@code Location}, not an {@code
  * Organization} — deliberately not treated as equivalent; see {@link
@@ -181,6 +181,63 @@ class FacilityIdExtractorTest {
                     new Reference("Organization/" + FACILITY_ID)));
 
             assertThat(facilityIdExtractor.extract(serviceRequest)).isEqualTo(new FacilityDetails(FACILITY_ID, null));
+        }
+    }
+
+
+    @Nested
+    @DisplayName("Composition.custodian")
+    class CompositionCustodianResolution {
+
+        @Test
+        @DisplayName("an Organization custodian is the facility")
+        void organizationCustodianIsTheFacility() {
+            org.hl7.fhir.r4.model.Composition composition = new org.hl7.fhir.r4.model.Composition();
+            composition.setCustodian(new Reference("Organization/" + FACILITY_ID).setDisplay("MBAGATHI COUNTY REFERRAL HOSPITAL"));
+
+            assertThat(facilityIdExtractor.extract(composition))
+                    .isEqualTo(new FacilityDetails(FACILITY_ID, "MBAGATHI COUNTY REFERRAL HOSPITAL"));
+        }
+
+        @Test
+        @DisplayName("a Composition without a custodian resolves to null")
+        void compositionWithoutCustodianResolvesToNull() {
+            assertThat(facilityIdExtractor.extract(new org.hl7.fhir.r4.model.Composition())).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("ServiceRequest.requester before performer")
+    class ServiceRequestRequesterResolution {
+
+        @Test
+        @DisplayName("an Organization requester (the ordering facility) wins over a different performer Organization")
+        void organizationRequesterWinsOverPerformer() {
+            ServiceRequest serviceRequest = new ServiceRequest();
+            serviceRequest.setRequester(new Reference("Organization/KE-SHRF-4AC0DD5F-0926-400E-B2BE"));
+            serviceRequest.addPerformer(new Reference("Organization/KE-SHRF-4A8E51CD-5FBB-4833-8B9D"));
+
+            assertThat(facilityIdExtractor.extract(serviceRequest))
+                    .isEqualTo(new FacilityDetails("KE-SHRF-4AC0DD5F-0926-400E-B2BE", null));
+        }
+
+        @Test
+        @DisplayName("a Practitioner requester (the usual case) falls through to the performer Organization")
+        void practitionerRequesterFallsThroughToPerformer() {
+            ServiceRequest serviceRequest = new ServiceRequest();
+            serviceRequest.setRequester(new Reference("Practitioner/KE-SHRPR-1F0D5853-2994-4BA4-935B"));
+            serviceRequest.addPerformer(new Reference("Organization/" + FACILITY_ID));
+
+            assertThat(facilityIdExtractor.extract(serviceRequest)).isEqualTo(new FacilityDetails(FACILITY_ID, null));
+        }
+
+        @Test
+        @DisplayName("a MedicationRequest's Practitioner requester is never a facility")
+        void medicationRequestPractitionerRequesterResolvesToNull() {
+            MedicationRequest medicationRequest = new MedicationRequest();
+            medicationRequest.setRequester(new Reference("Practitioner/KE-SHRPR-1F0D5853-2994-4BA4-935B"));
+
+            assertThat(facilityIdExtractor.extract(medicationRequest)).isNull();
         }
     }
 

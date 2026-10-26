@@ -17,11 +17,10 @@ import java.util.List;
  * <p>Read from the resource's own {@code Reference(Organization)} field, via
  * reflection rather than a hardcoded per-type mapping — the same
  * multi-accessor approach {@link PatientIdExtractor} uses for {@code
- * subject}/{@code patient}. Four accessor names are tried, in order:
- * {@link #ORGANIZATION_ACCESSOR_METHOD_NAMES}. A real survey of tibERbu's own production
- * data (every resource type actually seen in {@code inbound_event_log})
- * found exactly four resource types that carry an {@code Organization/}
- * reference at all:
+ * subject}/{@code patient}. The accessor names are tried in order:
+ * {@link #ORGANIZATION_ACCESSOR_METHOD_NAMES}. A survey of every tibERbu event on dev
+ * (every resource type seen in {@code inbound_event_log}) found these elements
+ * carrying the facility as an {@code Organization/} reference:
  * <ul>
  *   <li>{@code Consent.organization} — {@code getOrganization()}, a
  *       {@code List<Reference>}</li>
@@ -33,12 +32,21 @@ import java.util.List;
  *       {@code List<Reference>} — see the {@code ORGANIZATION_RESOURCE_TYPE}
  *       check below for why this one specifically needs a reference-type
  *       gate that the other three don't</li>
+ *   <li>{@code ServiceRequest.requester} — {@code getRequester()}, a single
+ *       {@code Reference}, tried before {@code performer}: the ordering
+ *       facility (14 ServiceRequests on dev, usually a Practitioner instead)</li>
+ *   <li>{@code Composition.custodian} — {@code getCustodian()}, a single
+ *       {@code Reference}: R4 "the organization responsible for ongoing
+ *       maintenance of and access to the composition" (85 of 93 Compositions)</li>
  * </ul>
- * Every other resource type actually seen (AllergyIntolerance, Condition,
- * MedicationRequest, Observation) declares none of these four accessors and
- * so resolves to {@code null} — including {@code MedicationDispense} and
- * {@code Procedure}, which carry a {@code location} reference instead. That
- * one is deliberately NOT treated as a facility reference: {@code location}
+ * Every other resource type seen (AllergyIntolerance, Condition,
+ * MedicationRequest, MedicationDispense, Procedure) carries no Organization
+ * reference in these elements and so resolves to {@code null} — a Practitioner
+ * {@code requester}/{@code performer} fails the Organization gate. {@code
+ * Observation.performer} is a Practitioner on all but 7 of 12,046 Observations on
+ * dev; those 7 name an Organization, which is used. {@code
+ * MedicationDispense} and {@code Procedure} carry a {@code location} reference
+ * instead, which is deliberately NOT treated as a facility reference: {@code location}
  * points to a {@code Location/}, not an {@code Organization/}, and the two
  * are not interchangeable — a {@code Location} need not belong to the same
  * organization the facility filter allowlists.
@@ -101,16 +109,23 @@ public class FacilityIdExtractor {
     private static final Logger log = LoggerFactory.getLogger(FacilityIdExtractor.class);
 
     /**
-     * Accessor method names tried in priority order. A given FHIR R4 resource
-     * class declares at most one of these — {@code getOrganization()} for
-     * {@code Consent}, {@code getServiceProvider()} for {@code Encounter},
-     * {@code getManagingOrganization()} for {@code EpisodeOfCare}, {@code
-     * getPerformer()} for {@code ServiceRequest} — so the order only matters
-     * in that it's checked deterministically, not because more than one could
-     * ever match the same resource.
+     * Accessor method names tried in priority order:
+     * {@code getOrganization()} for {@code Consent}, {@code getServiceProvider()} for
+     * {@code Encounter}, {@code getManagingOrganization()} for {@code EpisodeOfCare},
+     * {@code getCustodian()} for {@code Composition}, {@code getRequester()} then
+     * {@code getPerformer()} for {@code ServiceRequest}.
+     *
+     * <p>{@code ServiceRequest} is the one type with two of them, so the order matters there:
+     * {@code requester} — "the individual [or organization] who initiated the request" — names
+     * the facility that placed the order, which is the facility the event belongs to;
+     * {@code performer} — "the desired performer" — names where it is to be done. On dev, 8
+     * of the 14 ServiceRequests with an Organization requester have a different performer
+     * Organization. A Practitioner requester (the usual case) fails the Organization gate, so
+     * the walk carries on to {@code performer}.
      */
     private static final String[] ORGANIZATION_ACCESSOR_METHOD_NAMES =
-            {"getOrganization", "getServiceProvider", "getManagingOrganization", "getPerformer"};
+            {"getOrganization", "getServiceProvider", "getManagingOrganization", "getCustodian", "getRequester",
+             "getPerformer"};
 
     /**
      * The one FHIR resource type name a prefixed reference string is accepted
