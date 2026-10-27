@@ -24,6 +24,16 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
  */
 class CloudEventEnvelopeBuilderTest {
 
+    /**
+     * The redactor as production runs it (enabled, default rules): envelope building and adaptor
+     * routing must behave the same with redaction on.
+     */
+    private static org.openphc.tiberbu.cce.emitter.redaction.ClinicalDataRedactor productionRedactor() {
+        return new org.openphc.tiberbu.cce.emitter.redaction.ClinicalDataRedactor(
+                new org.openphc.tiberbu.cce.emitter.redaction.ClinicalDataRedactionProperties(true, null),
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+    }
+
     private static final String CONSENT_JSON = """
             {
               "resourceType": "Consent", "id": "VCR-20260901-57098420", "status": "active",
@@ -34,7 +44,7 @@ class CloudEventEnvelopeBuilderTest {
             OffsetDateTime.of(2026, 9, 1, 11, 55, 42, 118_000_000, ZoneOffset.UTC);
 
     private final CloudEventEnvelopeBuilder cloudEventEnvelopeBuilder =
-            new CloudEventEnvelopeBuilder(new EventIdGenerator(), new ObjectMapper());
+            new CloudEventEnvelopeBuilder(new EventIdGenerator(), new ObjectMapper(), productionRedactor());
 
     private SourceMetadata sourceMetadata() {
         return sourceMetadata("7f3c9b12-4d5e-4a6b-8c7d-9e0f1a2b3c4d");
@@ -70,7 +80,7 @@ class CloudEventEnvelopeBuilderTest {
         }
 
         @Test
-        @DisplayName("data holds the entry's FHIR resource, verbatim")
+        @DisplayName("data holds the entry's FHIR resource, verbatim when it carries nothing to redact (this Consent)")
         void dataHoldsTheEntryResourceVerbatim() throws Exception {
             CloudEventDto cloudEvent = cloudEventEnvelopeBuilder.build(
                     CONSENT_JSON, "KE-SHRP-170CDF0A-1363-4972-B36A", "Consent",
@@ -177,6 +187,46 @@ class CloudEventEnvelopeBuilderTest {
                     sourceMetadata());
 
             assertThat(consentEvent.id()).isNotEqualTo(observationEvent.id());
+        }
+
+        @Test
+        @DisplayName("versions differing only in redacted content still get different ids — the id is taken before redaction")
+        void idIsTakenBeforeRedaction() {
+            String firstReading = """
+                    {"resourceType": "Observation", "id": "obs-001", "status": "final",
+                     "code": {"coding": [{"system": "http://loinc.org", "code": "8310-5"}]},
+                     "valueQuantity": {"value": 38.4, "unit": "Cel"}}""";
+            String correctedReading = firstReading.replace("38.4", "37.4");
+
+            CloudEventDto first = cloudEventEnvelopeBuilder.build(
+                    firstReading, "KE-SHRP-170CDF0A-1363-4972-B36A", "Observation", sourceMetadata());
+            CloudEventDto corrected = cloudEventEnvelopeBuilder.build(
+                    correctedReading, "KE-SHRP-170CDF0A-1363-4972-B36A", "Observation", sourceMetadata());
+
+            // the forwarded data is identical once the value is redacted, but the correction must
+            // not be dropped by the Collector as a duplicate
+            assertThat(first.data()).isEqualTo(corrected.data());
+            assertThat(corrected.id()).isNotEqualTo(first.id());
+        }
+    }
+
+    @Nested
+    @DisplayName("clinical-data redaction")
+    class Redaction {
+
+        @Test
+        @DisplayName("the forwarded data has the clinical content removed")
+        void forwardedDataIsRedacted() {
+            CloudEventDto cloudEvent = cloudEventEnvelopeBuilder.build("""
+                    {"resourceType": "Condition", "id": "cond-001",
+                     "code": {"coding": [{"code": "5A11", "display": "Type 2 diabetes mellitus"}]},
+                     "subject": {"reference": "Patient/KE-SHRP-170CDF0A-1363-4972-B36A", "display": "TEST PATIENT"}}""",
+                    "KE-SHRP-170CDF0A-1363-4972-B36A", "Condition", sourceMetadata());
+
+            assertThat(cloudEvent.data().has("code")).isFalse();
+            assertThat(cloudEvent.data().path("subject").has("display")).isFalse();
+            assertThat(cloudEvent.data().path("subject").path("reference").asText())
+                    .isEqualTo("Patient/KE-SHRP-170CDF0A-1363-4972-B36A");
         }
     }
 

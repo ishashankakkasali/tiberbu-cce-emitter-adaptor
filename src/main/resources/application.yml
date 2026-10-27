@@ -26,6 +26,107 @@ cce:
     source: tiberbu
     facility-filter:
       ids: ${FACILITY_FILTER_IDS:}  # Set via env var: FACILITY_FILTER_IDS=0234,0030 (comma-separated, empty = all pass)
+    redaction:
+      # Clinical-data minimisation. CCE records THAT a clinical step happened — never WHAT the
+      # finding was. Full rationale: docs/data-dictionary.md §3.7
+      #
+      # HOW RULES COMBINE: the "*" rule applies to EVERY resource. A resource's own rule is applied
+      # ON TOP of it, so each type below lists only what is special about that type.
+      #
+      # ENTRY SYNTAX: a root field name (`code`) or a dot-delimited path
+      # (`hospitalization.dischargeDisposition`). A segment ending in `[]` steps through an array and
+      # applies to every element (`reaction[].manifestation`). The `[]` is REQUIRED where the data is
+      # an array; without it the path matches nothing. That is not silent — the adaptor logs a warning
+      # and increments tiberbu.cce.emitter.redaction.path.mismatch.
+      #
+      # KEPT on every type: the elements the Kenya protocol triggers on (Encounter class/type,
+      # EpisodeOfCare type/status, Observation category/code, ServiceRequest category/status,
+      # Composition type, every status), the clinical times the forwarding order reads, and the
+      # Organization references the facility ID is read from.
+      #
+      # REDACTION_ENABLED=false forwards full clinical payloads to the Collector, which persists them
+      # to inbound_event_log. Only for a time-boxed debugging window, never routine. Read at startup:
+      # change the env var and restart, no rebuild.
+      enabled: ${REDACTION_ENABLED:true}
+      rules:
+        # ── Applied to EVERY resource ─────────────────────────────────────────────────────────
+        # value[x] and free-text clinical content, plus the patient's name. subject.reference /
+        # patient.reference (the patient id) are preserved — that is how CCE keys the patient.
+        - resource-type: "*"
+          fields: >-
+            valueQuantity, valueCodeableConcept, valueString, valueBoolean, valueInteger, valueRange,
+            valueRatio, valueSampledData, valueTime, valueDateTime, valuePeriod, valueAttachment, note, text,
+            interpretation, dataAbsentReason, bodySite, method, specimen, referenceRange, contained, severity,
+            stage, evidence, dosageInstruction, reasonCode, reasonReference, orderDetail, patientInstruction,
+            comment, description, statusReason, instruction, summary, conclusion, conclusionCode, outcome,
+            subject.display, patient.display
+
+        # ── Additions per resource type ───────────────────────────────────────────────────────
+        # Every type tibERbu sends has an entry, so none can be overlooked. Dev volumes shown.
+
+        # 12.1k. code (LOINC) and category KEPT — protocol triggers match on them.
+        # component holds sub-observations, each with their own value[x].
+        # extension: em-no-findings-on-exam / em-no-investigation-performed — the exam result.
+        - resource-type: Observation
+          fields: component, extension
+
+        # 15.8k. class/type KEPT (protocol matching), serviceProvider KEPT (facility).
+        # extension dropped wholesale: em-incident-caller holds the emergency caller's details.
+        - resource-type: Encounter
+          fields: diagnosis, hospitalization.dischargeDisposition, extension
+
+        # 4.0k. type (general-opd) and status KEPT — the visit steps trigger on them.
+        - resource-type: EpisodeOfCare
+          fields: diagnosis
+
+        # 300. code = the test/procedure ordered; category, status, requester, performer KEPT.
+        # extension: emergency evacuation — the incident scene the patient was picked up from.
+        - resource-type: ServiceRequest
+          fields: code, extension
+
+        # 1.1k. The drug, quantity and refills; category, status, intent, authoredOn KEPT.
+        - resource-type: MedicationRequest
+          fields: medicationCodeableConcept, medicationReference, dispenseRequest
+
+        # 7.5k. code = the diagnosis; clinicalStatus/verificationStatus KEPT.
+        - resource-type: Condition
+          fields: code
+
+        # 4.5k. The drug, amount and days of supply; whenHandedOver KEPT (clinical time).
+        - resource-type: MedicationDispense
+          fields: medicationCodeableConcept, medicationReference, quantity, daysSupply
+
+        # 2.3k. No clinical finding — category/scope/status are what the Consent steps match on.
+        # Listed with nothing to add so it is documented as reviewed, not merely unmentioned.
+        - resource-type: Consent
+          fields: ""
+
+        # 6.9k. code = the procedure performed; status, performedDateTime, location KEPT.
+        - resource-type: Procedure
+          fields: code, complication
+
+        # 486. The drug and amount given.
+        - resource-type: MedicationAdministration
+          fields: medicationCodeableConcept, medicationReference, dosage, supportingInformation
+
+        # 348. code = the allergen; reaction holds manifestation detail.
+        - resource-type: AllergyIntolerance
+          fields: code, reaction
+
+        # 93. section = the summary itself (narrative text + clinical entries per section);
+        # type (patient summary), status, date, custodian (facility), title KEPT.
+        - resource-type: Composition
+          fields: section
+
+        # 3. code = the test reported; presentedForm = the rendered report.
+        - resource-type: DiagnosticReport
+          fields: code, presentedForm
+
+        # Not received yet. Pre-declared so a new feed cannot leak the study or the vaccine given.
+        - resource-type: ImagingStudy
+          fields: procedureCode, series, modality
+        - resource-type: Immunization
+          fields: vaccineCode
 
 # Actuator & Metrics
 management:

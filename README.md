@@ -89,6 +89,7 @@ The full property list, defaults, and env-var names are in [docs/data-dictionary
 | `KEYCLOAK_HOST` / `KEYCLOAK_REALM` / `KEYCLOAK_CLIENT_ID` / `KEYCLOAK_CLIENT_SECRET` | `cce.collector.auth.keycloak-*` | `KEYCLOAK_REALM` defaults to `cce` | OAuth2 `client_credentials` — used only when all four are set |
 | `EMITTER_SOURCE` | `cce.emitter.source` | `tiberbu` | The CloudEvents `source` attribute stamped on every event |
 | `FACILITY_FILTER_IDS` | `cce.emitter.facility-filter.ids` | *(empty — filter inactive)* | Comma-separated facility-ID allowlist |
+| `REDACTION_ENABLED` | `cce.emitter.redaction.enabled` | `true` | Clinical-data redaction; `false` forwards full clinical payloads (debugging only) |
 
 > `EMITTER_SOURCE`, not `CCE_EMITTER_SOURCE` — the one property here that doesn't follow the `CCE_`-prefixed pattern of its neighbors.
 

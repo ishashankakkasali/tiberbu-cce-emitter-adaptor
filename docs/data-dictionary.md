@@ -15,7 +15,7 @@ The adaptor outputs CloudEvents v1.0-compliant JSON to the CCE Collector.
 | `subject` | string | Recommended | Extracted from FHIR | Patient identifier, from the entry resource's own `subject.reference` or `patient.reference` (prefix stripped). A `Patient` resource never reaches this extraction, since the bundle contract skips it before extraction runs. Used as Kafka partition key. |
 | `time` | string (ISO-8601) | Recommended | Adaptor | Event creation timestamp in UTC |
 | `datacontenttype` | string | Recommended | Static | Always `"application/fhir+json"` |
-| `data` | object | Recommended | From FHIR resource | FHIR R4 resource JSON |
+| `data` | object | Recommended | From FHIR resource | FHIR R4 resource JSON, with its clinical content removed (§3.7). The event `id` is derived from the complete resource before removal. |
 | `facilityid` | string | Optional | FHIR resource | Facility ID, via `FacilityIdExtractor`: the resource's Organization reference, read from, in order, `Consent.organization`, `Encounter.serviceProvider`, `EpisodeOfCare.managingOrganization`, `Composition.custodian`, `ServiceRequest.requester` then `ServiceRequest.performer`. Only an `Organization/` reference (or a bare id) is accepted; a Practitioner `requester`/`performer` is skipped. A `ResourceType/` prefix is stripped (`Organization/1302` → `1302`). `null` when the resource carries no Organization reference in these elements (e.g. `Observation`, `Condition`, `MedicationRequest`, `MedicationDispense`). |
 | `facilityname` | string | Optional | FHIR resource | Facility display name, via `FacilityIdExtractor`, read from the same organization-equivalent reference's `display` field as `facilityid` — one resolution pass covers both (mirrors `FacilityService.upsertFacility()` in cce-compliance-service, which extracts the same two values the same way). `null` whenever `facilityid` is, and also when the reference carries no `display` — a known facility ID with an unknown name is a normal outcome, not an extraction failure. |
 | `sourceeventid` | string | Optional | *(not populated)* | Not populated |
@@ -171,6 +171,44 @@ A reference is accepted only when its `ResourceType/` prefix is `Organization` (
 | `logging.level.org.openphc.tiberbu.cce` | String | `DEBUG` (`INFO` in prod) | Log level for this adaptor's own packages |
 | `logging.level.org.springframework.web` | String | `INFO` (`DEBUG` in dev, `WARN` in prod) | Log level for Spring MVC |
 | `logging.pattern.console` | String | see `application.yml` | Console pattern for the `!prod` profile — carries the MDC fields (`correlationId`/`source`/`eventType`/`subject`) inline. Superseded by `logback-spring.xml`'s single-line JSON encoder in `prod`; see monitoring-alerting.md §5.1. |
+
+### 3.7 Clinical-Data Redaction Properties
+
+CCE records **that** a clinical step happened — for which patient, when and at which facility — never **what** the finding was. When the CloudEvent is built, `ClinicalDataRedactor` removes the clinical content from its `data`, so what reaches the Collector (and `inbound_event_log`, Kafka and ClickHouse) is the minimised resource. The rules cover the resource types tibERbu sends.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `cce.emitter.redaction.enabled` | boolean | `true` (env `REDACTION_ENABLED`, every profile) | Master switch. `false` forwards full clinical payloads — only for a time-boxed debugging window. |
+| `cce.emitter.redaction.rules` | list of `{resource-type, fields}` | see `application.yml` | Fields to remove. The `"*"` rule applies to every resource; a type's own rule is applied on top. A field is a root name (`code`) or a dot path (`hospitalization.dischargeDisposition`); `[]` steps through an array (`reaction[].manifestation`) and is required where the data is an array — a path that hits an array without it is logged and counted, not silently ignored. Restating `rules` in a profile replaces the whole list. |
+
+Both are read once at startup, so a change takes a restart, not a rebuild:
+
+- **Switch on/off:** set `REDACTION_ENABLED` and recreate the container.
+- **Change the rules without a rebuild:** mount a YAML file holding the **complete** `cce.emitter.redaction.rules` list and point `SPRING_CONFIG_ADDITIONAL_LOCATION` at its directory (e.g. `optional:file:/config/`). Spring Boot replaces a list wholesale from the highest-priority source, so a partial list there drops every rule it leaves out. The same applies to indexed env vars (`CCE_EMITTER_REDACTION_RULES_0_FIELDS`), which is why they are not used for rules.
+
+**Removed** (the `"*"` rule plus each type's additions):
+
+| Resource | Removed |
+|---|---|
+| every type (`"*"`) | `value[x]`, `note`, `text`, `interpretation`, `dataAbsentReason`, `bodySite`, `method`, `specimen`, `referenceRange`, `contained`, `severity`, `stage`, `evidence`, `dosageInstruction`, `reasonCode`, `reasonReference`, `orderDetail`, `patientInstruction`, `comment`, `description`, `statusReason`, `instruction`, `summary`, `conclusion`, `conclusionCode`, `outcome`, and the patient's name (`subject.display`, `patient.display`) |
+| Observation | `component`, `extension` (`em-no-findings-on-exam` / `em-no-investigation-performed`, the exam result) |
+| Encounter | `diagnosis`, `hospitalization.dischargeDisposition`, `extension` (e.g. the emergency caller's details) |
+| EpisodeOfCare | `diagnosis` |
+| ServiceRequest | `code` (the test/procedure ordered), `extension` (emergency evacuation, incl. the incident scene) |
+| MedicationRequest | `medicationCodeableConcept`, `medicationReference`, `dispenseRequest` |
+| Condition | `code` (the diagnosis) |
+| MedicationDispense | `medicationCodeableConcept`, `medicationReference`, `quantity`, `daysSupply` |
+| Consent | nothing beyond `"*"` |
+| Procedure | `code`, `complication` |
+| MedicationAdministration | `medicationCodeableConcept`, `medicationReference`, `dosage`, `supportingInformation` |
+| AllergyIntolerance | `code`, `reaction` |
+| Composition | `section` (each section's narrative and clinical entries) |
+| DiagnosticReport | `code`, `presentedForm` |
+| ImagingStudy, Immunization | `procedureCode`, `series`, `modality` / `vaccineCode` — not sent yet, pre-declared |
+
+**Kept**, so nothing downstream changes: the patient reference (`subject.reference` / `patient.reference`); every element the Kenya protocol triggers on (Encounter `class`/`type`, EpisodeOfCare `type`/`status`, Observation `category`/`code`, ServiceRequest `category`/`status`, MedicationRequest `category`, Consent `category`/`scope`, Composition `type`, every `status`); the clinical times the forwarding order reads (§5.5); and the Organization references the facility ID is read from (§1.1 `facilityid`).
+
+**Ordering with the event id.** `CloudEventEnvelopeBuilder` derives the content-based `id` from the complete resource **before** redaction. Two versions of a resource that differ only in removed content (e.g. a corrected Observation value) therefore still get different ids, and the correction is not dropped by the Collector as a duplicate.
 
 ## 4. Collector Response Model
 
@@ -344,6 +382,8 @@ Registered in `InboundEventService` and `CollectorForwardingService` via constru
 | `tiberbu.cce.emitter.collector.latency` | Timer | — | `CollectorForwardingService` | Collector forwarding round-trip latency |
 | `tiberbu.cce.emitter.collector.retries` | Counter | — | `CollectorForwardingService` | Retry attempts exhausted |
 | `tiberbu.cce.emitter.entries.filtered` | Counter | `source`, `facility`, `reason` | `FacilityFilter` | Events skipped by facility filter (not forwarded). `reason` value: `NOT_IN_ALLOWLIST`. |
+| `tiberbu.cce.emitter.events.redacted` | Counter | `resource_type` | `ClinicalDataRedactor` | Events from which clinical fields were removed (§3.7) |
+| `tiberbu.cce.emitter.redaction.path.mismatch` | Counter | `resource_type`, `path` | `ClinicalDataRedactor` | A configured redaction path that matched nothing because it reached an array without `[]` — a configuration defect: that path is redacting nothing |
 
 ## 7. MDC Context Fields
 
